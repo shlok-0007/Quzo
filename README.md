@@ -1,4 +1,4 @@
-# Quiz Application
+# Quzo (Quiz Application)
 
 A comprehensive web-based quiz management system built with Flask and SQLAlchemy. This application allows professors to create and manage quizzes, while students can take these quizzes and view their results.
 
