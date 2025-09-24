@@ -6,12 +6,6 @@ A comprehensive web-based quiz management system built with Flask and SQLAlchemy
 
 You can access a live demo of this application at: [shloksitare.pythonanywhere.com](http://shloksitare.pythonanywhere.com)
 
-**Demo Accounts:**
-- **Professor** - Email: `prof@example.com` | Password: `professor123`
-- **Student** - Email: `student@example.com` | Password: `student123`
-
-> Note: Please use these demo accounts responsibly. Any data added may be cleared periodically.
-
 ## Features
 
 ### For Professors
