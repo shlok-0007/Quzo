@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Edit Quiz: {{ quiz.title }}</h2>
+    <form method="POST" enctype="multipart/form-data">
+        <div class="mb-3">
+            <label for="quiz_title" class="form-label">Quiz Title</label>
+            <input type="text" class="form-control" name="quiz_title" id="quiz_title" value="{{ quiz.title }}" required>
+        </div>
+<div class="mb-3">
+    <label for="time_limit" class="form-label">Time Limit (minutes)</label>
+    <input type="number" class="form-control" name="time_limit" id="time_limit" min="1"
+           value="{{ quiz.time_limit if quiz.time_limit is not none else '' }}">
+</div>
+
+<div class="mb-3">
+    <label for="access_code" class="form-label">Access Code (leave blank to remove)</label>
+    <div class="input-group">
+        <input type="text" class="form-control" name="access_code" id="access_code" 
+               value="{{ quiz.access_code if quiz.access_code else '' }}" 
+               placeholder="e.g., QUIZ2024">
+        <button type="button" class="btn btn-outline-secondary" onclick="generateRandomCode()">
+            <i class="bi bi-shuffle"></i> Generate
+        </button>
+    </div>
+    <div class="form-text">If set, students will need this code to access the quiz.</div>
+</div>
+
+        {% for question in questions %}
+        <hr>
+        <!-- Remove the nested <form> -->
+
+    <div class="d-flex justify-content-between align-items-center">
+    <h5>Question {{ loop.index }}</h5>
+
+    <!-- <button type="button"
+        class="btn btn-sm btn-outline-danger"
+        onclick="deleteQuestion({{ question.id }})">
+    <i class="fas fa-trash-alt"></i> Delete Question
+    </button> -->
+
+</div>
+
+
+        <!-- Toggle: Question Type -->
+        <!-- <div class="mb-3">
+            <label class="form-label">Question Type</label>
+            <select class="form-select" data-id="{{ question.id }}" onchange="handleToggle(this, '{{ question.id }}')">
+                <option value="both" selected>Text + Image</option>
+                <option value="text" {% if question.text and not question.image %}selected{% endif %}>Text Only</option>
+                <option value="image" {% if question.image and not question.text %}selected{% endif %}>Image Only</option>
+            </select>
+        </div> -->
+
+        <!-- Text Input -->
+        <div class="mb-3" id="text_div_{{ question.id }}">
+            <label for="q{{ question.id }}_text" class="form-label">Question Text (optional)</label>
+            <input type="text" class="form-control" name="q{{ question.id }}_text" id="q{{ question.id }}_text" value="{{ question.text }}">
+        </div>
+
+        <!-- Image Input -->
+        <div class="mb-3" id="image_div_{{ question.id }}">
+            <label for="q{{ question.id }}_image" class="form-label">Question Image (optional)</label>
+            {% if question.image %}
+                <div>
+                    <img src="{{ url_for('static', filename='uploads/' + question.image) }}" class="img-thumbnail mb-2" width="200">
+                </div>
+            {% endif %}
+            <input type="file" class="form-control" name="q{{ question.id }}_image" id="q{{ question.id }}_image">
+        </div>
+
+        <!-- Options -->
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Option A</label>
+                <input type="text" class="form-control" name="q{{ question.id }}_opt_a" value="{{ question.option_a }}" required>
+            </div>
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Option B</label>
+                <input type="text" class="form-control" name="q{{ question.id }}_opt_b" value="{{ question.option_b }}" required>
+            </div>
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Option C</label>
+                <input type="text" class="form-control" name="q{{ question.id }}_opt_c" value="{{ question.option_c }}" required>
+            </div>
+            <div class="col-md-6 mb-3">
+                <label class="form-label">Option D</label>
+                <input type="text" class="form-control" name="q{{ question.id }}_opt_d" value="{{ question.option_d }}" required>
+            </div>
+        </div>
+
+        <!-- Correct Option -->
+        <div class="mb-3">
+            <label class="form-label">Correct Option</label>
+            <select class="form-select" name="q{{ question.id }}_correct" required>
+                <option value="a" {% if question.correct_option == 'a' %}selected{% endif %}>A</option>
+                <option value="b" {% if question.correct_option == 'b' %}selected{% endif %}>B</option>
+                <option value="c" {% if question.correct_option == 'c' %}selected{% endif %}>C</option>
+                <option value="d" {% if question.correct_option == 'd' %}selected{% endif %}>D</option>
+            </select>
+        </div>
+        {% endfor %}
+    
+        <button type="submit" class="btn btn-primary mt-3">save.</button>
+        <a href="{{ url_for('professor_dashboard') }}" class="btn btn-secondary mt-3">Cancel</a>
+    </form>
+</div>
+<form id="deleteForm" method="POST" style="display:none;"></form>
+
+<script>
+function deleteQuestion(qid) {
+    if (confirm('Are you sure you want to delete this question? This action cannot be undone.')) {
+        fetch(`/professor/question/${qid}/delete`, { method: 'POST' })
+            .then(response => window.location.reload())
+            .catch(error => console.error('Error deleting question:', error));
+    }
+}
+
+function handleToggle(selectElem, qid) {
+    const textDiv = document.getElementById(`text_div_${qid}`);
+    const imageDiv = document.getElementById(`image_div_${qid}`);
+
+    if (selectElem.value === 'both') {
+        textDiv.style.display = 'block';
+        imageDiv.style.display = 'block';
+    } else if (selectElem.value === 'text') {
+        textDiv.style.display = 'block';
+        imageDiv.style.display = 'none';
+    } else if (selectElem.value === 'image') {
+        textDiv.style.display = 'none';
+        imageDiv.style.display = 'block';
+    }
+}
+
+function generateRandomCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excluding similar looking characters
+    let result = '';
+    for (let i = 0; i < 6; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    document.getElementById('access_code').value = result;
+}
+
+// Set initial visibility on page load
+window.onload = function() {
+    document.querySelectorAll('.question-block').forEach(block => {
+        const qid = block.id.split('-')[1];
+        const select = document.querySelector(`#${block.id} select`);
+        if (select) handleToggle(select, qid);
+    });
+};
+</script>
+
+{% endblock %}

@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mb-4">Create New Quiz</h2>
+
+<form method="POST" action="{{ url_for('create_quiz') }}" enctype="multipart/form-data" id="quiz-form" class="card p-4 shadow-sm">
+  <div class="mb-3">
+    <label for="quiz_title" class="form-label">Quiz Title</label>
+    <input type="text" class="form-control" id="quiz_title" name="quiz_title" required>
+  </div>
+
+  <div class="row">
+    <div class="col-md-6 mb-3">
+      <label for="time_limit" class="form-label">Time Limit (minutes)</label>
+      <input type="number" class="form-control" name="time_limit" id="time_limit" min="1" placeholder="Optional">
+    </div>
+    <div class="col-md-3 mb-3">
+      <label for="marks_correct" class="form-label">Marks for Correct</label>
+      <input type="number" step="0.1" class="form-control" name="marks_correct" id="marks_correct" value="4" required>
+    </div>
+    <div class="col-md-3 mb-3">
+      <label for="marks_incorrect" class="form-label">Negative Marks</label>
+      <input type="number" step="0.1" class="form-control" name="marks_incorrect" id="marks_incorrect" value="-1" required>
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <label for="access_code">Access Code (optional)</label>
+    <input type="text" class="form-control" name="access_code" placeholder="e.g. QUIZ2025">
+  </div>
+
+  <hr>
+  <h4>Questions</h4>
+  <div id="questions-container">
+    <div class="question-block border rounded p-3 mb-3" id="question-block-1">
+      <h5>Question 1</h5>
+      <div class="mb-3">
+        <label class="form-label">Question Text</label>
+        <textarea class="form-control" name="q1_text" rows="2"></textarea>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Question Image (optional)</label>
+        <input type="file" class="form-control" name="q1_image" accept="image/*">
+      </div>
+      <div class="row g-3">
+        {% for opt in ['a', 'b', 'c', 'd'] %}
+        <div class="col-md-6">
+          <label class="form-label">Option {{ opt|upper }}</label>
+          <input type="text" class="form-control" name="q1_opt_{{opt}}" required>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="mt-3">
+        <label class="form-label">Correct Option</label>
+        <select class="form-select" name="q1_correct" required>
+          <option disabled selected value="">Choose...</option>
+          <option value="a">A</option>
+          <option value="b">B</option>
+          <option value="c">C</option>
+          <option value="d">D</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <button type="button" class="btn btn-outline-secondary mb-3" id="add-question-btn">➕ Add Another Question</button>
+  <br>
+  <button type="submit" class="btn btn-primary">Create Quiz</button>
+</form>
+
+<script>
+let questionCount = 1;
+const questionsContainer = document.getElementById('questions-container');
+const addQuestionBtn = document.getElementById('add-question-btn');
+
+addQuestionBtn.addEventListener('click', () => {
+  questionCount++;
+  const block = document.createElement('div');
+  block.classList.add('question-block', 'border', 'rounded', 'p-3', 'mb-3');
+  block.id = `question-block-${questionCount}`;
+  block.innerHTML = `
+    <h5>Question ${questionCount}</h5>
+    <div class="mb-3">
+      <label class="form-label">Question Text</label>
+      <textarea class="form-control" name="q${questionCount}_text" rows="2"></textarea>
+    </div>
+    <div class="mb-3">
+      <label class="form-label">Question Image (optional)</label>
+      <input type="file" class="form-control" name="q${questionCount}_image" accept="image/*">
+    </div>
+    <div class="row g-3">
+      ${['a','b','c','d'].map(opt => `
+        <div class="col-md-6">
+          <label class="form-label">Option ${opt.toUpperCase()}</label>
+          <input type="text" class="form-control" name="q${questionCount}_opt_${opt}" required>
+        </div>`).join('')}
+    </div>
+    <div class="mt-3">
+      <label class="form-label">Correct Option</label>
+      <select class="form-select" name="q${questionCount}_correct" required>
+        <option disabled selected value="">Choose...</option>
+        <option value="a">A</option>
+        <option value="b">B</option>
+        <option value="c">C</option>
+        <option value="d">D</option>
+      </select>
+    </div>
+    <button type="button" class="btn btn-sm btn-danger mt-2 remove-question-btn" data-block-id="${questionCount}">❌ Remove</button>
+  `;
+  questionsContainer.appendChild(block);
+
+  block.querySelector('.remove-question-btn').addEventListener('click', (e) => {
+    const id = e.target.getAttribute('data-block-id');
+    const elem = document.getElementById(`question-block-${id}`);
+    if (elem && questionsContainer.children.length > 1) elem.remove();
+    else alert('At least one question is required.');
+  });
+});
+
+document.getElementById('quiz-form').addEventListener('submit', function (e) {
+  const blocks = document.querySelectorAll('.question-block');
+  for (let block of blocks) {
+    const text = block.querySelector('textarea').value.trim();
+    const image = block.querySelector('input[type="file"]').files.length;
+    if (!text && !image) {
+      e.preventDefault();
+      alert('Each question must have either text or an image.');
+      return false;
+    }
+  }
+});
+</script>
+
+{% endblock %}

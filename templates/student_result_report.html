@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mb-4">📄 Quiz Report: {{ quiz.title }}</h2>
+
+<p><strong>Score:</strong> {{ result.score }} / {{  result.total_questions * quiz.marks_correct}}</p>
+<p><strong>Submitted on:</strong> {{ result.submitted_at.strftime('%Y-%m-%d %H:%M') }}</p>
+
+<hr>
+
+{% for q in report %}
+{# Determine outer border class based on answer status #}
+{% set border_class =
+    'border-success' if q.selected == q.correct else
+    'border-danger' if q.selected else
+    'border-warning'
+%}
+
+<div class="mb-4 border p-3 rounded {{ border_class }}">
+    <p><strong>Q{{ loop.index }}:</strong> {{ q.text }}</p>
+
+    {% if q.image %}
+    <img src="{{ url_for('static', filename='uploads/' + q.image) }}" alt="Question Image" class="img-fluid mb-2 rounded border">
+    {% endif %}
+
+    <ul class="list-group">
+        {% for option in q.options %}
+        {% set opt_letter = ('a', 'b', 'c', 'd')[loop.index0] %}
+
+        {# Determine inner list item class #}
+        {% set item_class =
+            'list-group-item-success' if opt_letter == q.correct and opt_letter == q.selected else
+            'list-group-item-danger' if opt_letter == q.selected and opt_letter != q.correct else
+            'list-group-item-info' if opt_letter == q.correct else
+            ''
+        %}
+
+        <li class="list-group-item {{ item_class }}">
+            <strong>{{ opt_letter|upper }}.</strong> {{ option }}
+
+            {% if opt_letter == q.correct %} ✅ Correct {% endif %}
+            {% if q.selected == None and opt_letter == q.correct %} ⚠️ Not Answered {% endif %}
+            {% if opt_letter == q.selected and opt_letter != q.correct %} ❌ Your Answer {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endfor %}
+
+<!-- <a href="{{ url_for('student_dashboard') }}" class="btn btn-secondary mt-4">⬅ Back to Dashboard</a> -->
+{% endblock %}

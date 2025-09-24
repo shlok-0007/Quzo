@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .login-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 90vh;
+        padding: 20px 15px;
+        margin: 0 auto;
+        max-width: 100%;
+    }
+
+    .login-card {
+        background: var(--dark-gray);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 30px 20px;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+        width: 100%;
+        max-width: 400px;
+        animation: fadeIn 0.5s ease-in-out;
+        margin: 0 15px;
+    }
+
+    .login-card h2 {
+        text-align: center;
+        font-weight: 700;
+        margin: 0 0 25px 0;
+        font-size: 1.75rem;
+        color: var(--text-primary);
+    }
+    
+    @media (max-width: 480px) {
+        .login-wrapper {
+            padding: 15px 10px;
+            min-height: 85vh;
+        }
+        
+        .login-card {
+            padding: 25px 15px;
+            border-radius: 10px;
+        }
+        
+        .login-card h2 {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+        }
+        
+        .form-label {
+            font-size: 0.95rem;
+        }
+        
+        .form-control {
+            padding: 10px 12px;
+            font-size: 0.95rem;
+        }
+        
+        .btn-login {
+            padding: 10px 15px;
+            font-size: 1rem;
+        }
+        
+        .login-link {
+            font-size: 0.95rem;
+        }
+    }
+
+    .form-label {
+        font-weight: 500;
+        color: var(--text-secondary);
+        font-size: 1rem;
+    }
+
+    .form-control {
+        border-radius: 12px;
+        font-size: 1rem;
+        padding: 10px 14px;
+        color: #fff;
+    }
+
+    .btn-login {
+        background: var(--primary);
+        border: none;
+        padding: 12px 30px;
+        font-weight: 600;
+        color: white;
+        border-radius: 10px;
+        width: 100%;
+        font-size: 1.1rem;
+        transition: all 0.3s;
+    }
+
+    .btn-login:hover {
+        background: var(--primary-light);
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(124, 77, 255, 0.3);
+    }
+
+    .login-redirect {
+        text-align: center;
+        margin-top: 25px;
+        color: var(--text-secondary);
+        font-weight: 500;
+    }
+
+    .login-redirect a {
+        color: var(--primary-light);
+        font-weight: 500;
+        text-decoration: none;
+        transition: all 0.3s;
+    }
+
+    .login-redirect a:hover {
+        text-decoration: underline;
+    }
+
+    @keyframes fadeIn {
+        from {opacity: 0; transform: translateY(30px);}
+        to {opacity: 1; transform: translateY(0);}
+    }
+
+</style>
+
+<!-- Bootstrap Icons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+
+<div class="login-wrapper">
+    <div class="login-card">
+        <div class="text-center mb-4">
+            <div class="d-flex justify-content-center align-items-center mb-3">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="me-2">
+                    <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 20C7.59 20 4 16.41 4 12C4 7.59 7.59 4 12 4C16.41 4 20 7.59 20 12C20 16.41 16.41 20 12 20Z" fill="#4f46e5"/>
+                    <path d="M13 7H11V13H17V11H13V7Z" fill="#4f46e5"/>
+                    <path d="M13 15H11V17H13V15Z" fill="#4f46e5"/>
+                </svg>
+                <h2 class="m-0">Quzo</h2>
+            </div>
+            <h4 class="text-muted">Login to your account</h4>
+        </div>
+        <form method="POST" action="{{ url_for('login') }}">
+            <div class="mb-4">
+                <label for="username" class="form-label">Username</label>
+                <div class="input-group">
+                    <span class="input-group-text">@</span>
+                    <input type="text" class="form-control" id="username" name="username" required>
+                </div>
+            </div>
+            <div class="mb-4">
+                <label for="password" class="form-label">Password</label>
+                <div class="input-group">
+                    <span class="input-group-text">*</span>
+                    <input type="password" class="form-control" id="password" name="password" required>
+                </div>
+            </div>
+            <button type="submit" class="btn-login">Login</button>
+        </form>
+
+        <script>
+        // Basic form validation for login
+        document.querySelector('form').addEventListener('submit', function(event) {
+            const password = document.getElementById('password');
+            
+            // Basic validation - just check if password is not empty
+            // More thorough validation is done on the server side
+            if (password.value.trim() === '') {
+                event.preventDefault();
+                password.classList.add('is-invalid');
+                return false;
+            }
+            
+            return true;
+        });
+        </script>
+
+        <div class="text-center mt-3">
+            <a href="{{ url_for('forgot_password') }}" class="text-decoration-none">
+                <i class="bi bi-question-circle me-1"></i> Forgot Password?
+            </a>
+        </div>
+
+        <div class="login-redirect">
+            Don't have an account? <a href="{{ url_for('register') }}">Register here</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

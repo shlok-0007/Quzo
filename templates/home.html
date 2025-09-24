@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+  .feature-icon {
+    font-size: 3rem;
+    color: var(--primary-accent);
+  }
+  .feature-card {
+    background-color: var(--dark-card);
+    border: 1px solid var(--gray);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .feature-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+  }
+</style>
+
+<div class="container py-5">
+  <div class="text-center mb-5">
+    <h1 class="display-4">Welcome to Quzo</h1>
+    <p class="lead text-muted">A modern platform for creating, managing, and taking quizzes.</p>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-md-4">
+      <div class="card feature-card h-100 p-4 text-center">
+        <div class="feature-icon mb-3">📊</div>
+        <h4 class="mb-2">Dynamic Analytics</h4>
+        <p>Get detailed insights into quiz performance with dynamic charts and grade distributions.</p>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card feature-card h-100 p-4 text-center">
+        <div class="feature-icon mb-3">🔒</div>
+        <h4 class="mb-2">Secure & Role-Based</h4>
+        <p>Separate dashboards and controls for professors and students ensure a secure and tailored experience.</p>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card feature-card h-100 p-4 text-center">
+        <div class="feature-icon mb-3">✏️</div>
+        <h4 class="mb-2">Live Editing</h4>
+        <p>Professors can edit quizzes in real-time, and changes are instantly reflected for students taking the quiz.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="text-center mt-5">
+    <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">Get Started</a>
+  </div>
+</div>
+{% endblock %}

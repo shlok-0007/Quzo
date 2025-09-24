@@ -1,0 +1,74 @@
+  {% extends "base.html" %}
+
+  {% block content %}
+  <div class="container py-5">
+    <div class="d-flex justify-content-between align-items-center mb-5">
+      <h2 class="mb-0 display-5">🎓 Student Dashboard</h2>
+      <span class="fs-5 text-muted">Welcome, <strong>{{ session.username }}</strong>!</span>
+    </div>
+
+    <div class="row g-5">
+      <!-- Available Quizzes -->
+      <div class="col-lg-6">
+        <div class="card border-0 shadow rounded-4 h-100">
+          <div class="card-header bg-primary text-white rounded-top-4">
+            <h3 class="mb-0">📚 Available Quizzes</h3>
+          </div>
+          <div class="card-body">
+            {% if quizzes %}
+            <ul class="list-group list-group-flush fs-5">
+              {% for quiz in quizzes %}
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                  <strong>{{ quiz.title }}</strong><br>
+                  <small class="text-muted">By: {{ quiz.creator.username }}</small>
+                </div>
+                {% if quiz.id in taken_quiz_ids %}
+                <span class="badge bg-secondary">Taken</span>
+                {% else %}
+                <a href="{{ url_for('access_quiz', quiz_id=quiz.id) }}" class="btn btn-outline-success">Take Quiz</a>
+                {% endif %}
+              </li>
+              {% endfor %}
+            </ul>
+            {% else %}
+            <p class="text-muted">No quizzes available right now.</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Past Results -->
+      <div class="col-lg-6">
+        <div class="card border-0 shadow rounded-4 h-100">
+          <div class="card-header bg-success text-white rounded-top-4">
+            <h3 class="mb-0">📈 Your Results</h3>
+          </div>
+          <div class="card-body">
+            {% if results %}
+            <ul class="list-group list-group-flush fs-5">
+              {% for result in results %}
+              <li class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                  <strong>{{ result.quiz.title }}</strong><br>
+                  <small>
+                    Score: {{ result.score }} / {{ result.total_questions * result.quiz.marks_correct }} marks
+                  </small>
+                </div>
+                {% if result.quiz and result.quiz.report_released %}
+                <a href="{{ url_for('student_quiz_report', quiz_id=result.quiz_id) }}" class="btn btn-outline-info">📄 Report</a>
+                {% else %}
+                <span class="text-muted">Pending</span>
+                {% endif %}
+              </li>
+              {% endfor %}
+            </ul>
+            {% else %}
+            <p class="text-muted">You haven't taken any quizzes yet.</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endblock %}

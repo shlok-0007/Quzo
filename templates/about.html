@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+
+{% block title %}About - Quzo{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Main About Section -->
+    <div class="row justify-content-center mb-5">
+        <div class="col-lg-10">
+            <div class="card shadow-lg border-0 rounded-lg">
+                <div class="card-header bg-primary text-white text-center py-3">
+                    <h2 class="my-2">About Quzo</h2>
+                </div>
+                <div class="card-body p-4 p-md-5">
+                    <div class="row align-items-center mb-4">
+                        <div class="col-md-6">
+                            <p class="lead">
+                                Quzo is a modern, interactive platform designed to streamline the process of creating, managing, and taking quizzes for educational and professional environments.
+                            </p>
+                            <p>
+                                Our mission is to provide an intuitive and powerful tool for both professors and students. Professors can dynamically create quizzes, view detailed analytics on student performance, and even edit quizzes in real-time.
+                            </p>
+                        </div>
+                        <div class="col-md-6 text-center">
+                            <div class="d-flex flex-column align-items-center">
+                                <svg width="120" height="120" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="mb-3">
+                                    <circle cx="12" cy="12" r="10" fill="#4f46e5" opacity="0.1"/>
+                                    <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 20C7.59 20 4 16.41 4 12C4 7.59 7.59 4 12 4C16.41 4 20 7.59 20 12C20 16.41 16.41 20 12 20Z" fill="#4f46e5"/>
+                                    <path d="M13 7H11V13H17V11H13V7Z" fill="#4f46e5"/>
+                                    <path d="M13 15H11V17H13V15Z" fill="#4f46e5"/>
+                                </svg>
+                                <h2 class="text-primary">Quzo</h2>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Team Section -->
+    <div class="row justify-content-center mb-5">
+        <div class="col-12 text-center mb-4">
+            <h2 class="display-5 fw-bold">Our Team</h2>
+            <p class="lead text-muted">Meet the talented individuals behind Quzo</p>
+        </div>
+        
+        <!-- Team Member 1 -->
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body text-center p-4">
+                    <div class="position-relative d-inline-block mb-3">
+                        <img src="{{ url_for('static', filename='img/team/shlok.jpg') }}" 
+                             onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name=Shlok+Gupta&background=0D8ABC&color=fff&size=200'"
+                             class="team-avatar rounded-circle" 
+                             alt="Shlok Gupta"
+                             style="width: 100px; height: 100px; object-fit: cover;">
+                    </div>
+                    <h5 class="card-title">Shlok Gupta</h5>
+                    <p class="text-muted">Developer</p>
+                    <div class="social-links">
+                        <a href="https://linkedin.com/in/username" target="_blank" class="text-decoration-none me-2" title="LinkedIn">
+                            <i class="fab fa-linkedin fa-lg text-white"></i>
+                        </a>
+                        <a href="https://github.com/username" target="_blank" class="text-decoration-none" title="GitHub">
+                            <i class="fab fa-github fa-lg text-white"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Team Member 2 -->
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body text-center p-4">
+                    <div class="position-relative d-inline-block mb-3">
+                        <img src="{{ url_for('static', filename='img/team/rajiv.jpg') }}" 
+                             onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name=Rajiv+Kumar&background=0D8ABC&color=fff&size=200'"
+                             class="team-avatar rounded-circle" 
+                             alt="Rajiv Kumar"
+                             style="width: 100px; height: 100px; object-fit: cover;">
+                    </div>
+                    <h5 class="card-title">Rajiv Kumar</h5>
+                    <p class="text-muted">Developer</p>
+                    <div class="social-links">
+                        <a href="https://linkedin.com/in/username" target="_blank" class="text-decoration-none me-2" title="LinkedIn">
+                            <i class="fab fa-linkedin fa-lg text-white"></i>
+                        </a>
+                        <a href="https://github.com/username" target="_blank" class="text-decoration-none" title="GitHub">
+                            <i class="fab fa-github fa-lg text-white"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Team Member 3 -->
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body text-center p-4">
+                    <div class="position-relative d-inline-block mb-3">
+                        <img src="{{ url_for('static', filename='img/team/shivam.jpg') }}" 
+                             onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name=Shivam+Shukla&background=0D8ABC&color=fff&size=200'"
+                             class="team-avatar rounded-circle" 
+                             alt="Shivam Shukla"
+                             style="width: 100px; height: 100px; object-fit: cover;">
+                    </div>
+                    <h5 class="card-title">Shivam Shukla</h5>
+                    <p class="text-muted">Developer</p>
+                    <div class="social-links">
+                        <a href="https://linkedin.com/in/username" target="_blank" class="text-decoration-none me-2" title="LinkedIn">
+                            <i class="fab fa-linkedin fa-lg text-white"></i>
+                        </a>
+                        <a href="https://github.com/username" target="_blank" class="text-decoration-none" title="GitHub">
+                            <i class="fab fa-github fa-lg text-white"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Team Member 4 -->
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body text-center p-4">
+                    <div class="position-relative d-inline-block mb-3">
+                        <img src="{{ url_for('static', filename='img/team/aripta.jpg') }}" 
+                             onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name=Aripta+Tripaathi&background=0D8ABC&color=fff&size=200'"
+                             class="team-avatar rounded-circle" 
+                             alt="Aripta Tripaathi"
+                             style="width: 100px; height: 100px; object-fit: cover;">
+                    </div>
+                    <h5 class="card-title">Aripta Tripaathi</h5>
+                    <p class="text-muted">Developer</p>
+                    <div class="social-links">
+                        <a href="https://linkedin.com/in/username" target="_blank" class="text-decoration-none me-2" title="LinkedIn">
+                            <i class="fab fa-linkedin fa-lg text-white"></i>
+                        </a>
+                        <a href="https://github.com/username" target="_blank" class="text-decoration-none" title="GitHub">
+                            <i class="fab fa-github fa-lg text-white"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Team Member 5 -->
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body text-center p-4">
+                    <div class="position-relative d-inline-block mb-3">
+                        <img src="{{ url_for('static', filename='img/team/akanksha.jpg') }}" 
+                             onerror="this.onerror=null; this.src='https://ui-avatars.com/api/?name=Akanksha+Kushwaha&background=0D8ABC&color=fff&size=200'"
+                             class="team-avatar rounded-circle" 
+                             alt="Akanksha Kushwaha"
+                             style="width: 100px; height: 100px; object-fit: cover;">
+                    </div>
+                    <h5 class="card-title">Akanksha Kushwaha</h5>
+                    <p class="text-muted">Developer</p>
+                    <div class="social-links">
+                        <a href="https://linkedin.com/in/username" target="_blank" class="text-decoration-none me-2" title="LinkedIn">
+                            <i class="fab fa-linkedin fa-lg text-white"></i>
+                        </a>
+                        <a href="https://github.com/username" target="_blank" class="text-decoration-none" title="GitHub">
+                            <i class="fab fa-github fa-lg text-white"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Team Member 6 -->
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body text-center p-4">
+                    <img src="https://ui-avatars.com/api/?name=Gauravv+Rathore&background=0D8ABC&color=fff&size=100" class="rounded-circle mb-3" alt="Gauravv Rathore">
+                    <h5 class="card-title">Gauravv Rathore</h5>
+                    <p class="text-muted">Developer</p>
+                    <div class="social-links">
+                        <a href="https://linkedin.com/in/username" target="_blank" class="text-decoration-none me-2" title="LinkedIn">
+                            <i class="fab fa-linkedin fa-lg text-white"></i>
+                        </a>
+                        <a href="https://github.com/username" target="_blank" class="text-decoration-none" title="GitHub">
+                            <i class="fab fa-github fa-lg text-white"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feedback Section -->
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="card shadow-sm border-0 rounded-lg">
+                <div class="card-header bg-light py-3">
+                    <h3 class="my-2 text-center">We Value Your Feedback</h3>
+                </div>
+                <div class="card-body p-4 p-md-5">
+                    <p class="text-center text-muted mb-4">
+                        Have a suggestion or found a bug? Let us know!
+                    <form action="{{ url_for('about') }}" method="POST">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="name" class="form-label">Your Name</label>
+                                <input type="text" class="form-control" id="name" name="name" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="email" class="form-label">Your Email</label>
+                                <input type="email" class="form-control" id="email" name="email" required>
+                            </div>
+                        </div>
+                        <div class="mb-4">
+                            <label for="feedback" class="form-label">Your Feedback</label>
+                            <textarea class="form-control" id="feedback" name="feedback" rows="4" required></textarea>
+                        </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary btn-lg px-4">
+                                <i class="fas fa-paper-plane me-2"></i>Submit Feedback
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .team-member-card {
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    .team-member-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;
+    }
+    .social-links a {
+        transition: all 0.3s ease;
+        opacity: 0.7;
+    }
+    .social-links a:hover {
+        opacity: 1;
+        transform: scale(1.1);
+    }
+    .card {
+        border: none;
+        transition: all 0.3s ease;
+    }
+    .card-header {
+        border-bottom: none;
+    }
+</style>
+
+{% endblock %}

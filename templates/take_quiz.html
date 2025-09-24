@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2 class="mb-4 text-center">{{ quiz.title }}</h2>
+
+{% if remaining_seconds %}
+<div class="sticky-top py-2 shadow-sm mb-3" style="background-color: var(--dark-gray);">
+  <div class="container d-flex justify-content-between align-items-center">
+    <div><strong>Question <span id="currentQuestionIndex">1</span> / {{ questions|length }}</strong></div>
+    <div id="timer" class="fw-bold">Time Remaining: <span id="countdown" class="text-primary"></span></div>
+  </div>
+</div>
+{% endif %}
+
+<style>
+  @keyframes blink {
+    0% { opacity: 1; }
+    50% { opacity: 0.2; }
+    100% { opacity: 1; }
+  }
+  .time-warning {
+    color: #ff0000 !important;
+    text-shadow: 0 0 5px rgba(255, 0, 0, 0.5);
+    animation: blink 0.8s steps(2, start) infinite;
+    font-weight: bold;
+    font-size: 1.05em;
+    transition: all 0.3s ease;
+  }
+</style>
+
+<!-- {% if remaining_seconds %}
+<div class="sticky-top py-2 shadow-sm mb-3" style="background-color: var(--dark-gray);">
+  <div class="container d-flex justify-content-between align-items-center">
+    <div><strong>Question <span id="currentQuestionIndex">1</span> / {{ questions|length }}</strong></div>
+    <div id="timer" class="fw-bold">Time Remaining: <span id="countdown" class="text-primary"></span></div>
+  </div>
+</div>
+{% endif %} -->
+
+<!-- ✅ INSERT INSTRUCTIONS HERE -->
+<div class="mb-3">
+  <div class="alert alert-secondary">
+    <strong>Instructions:</strong>
+    <ul class="mb-0">
+      {% if quiz.time_limit %}
+        <li>Time Limit: {{ quiz.time_limit }} minutes</li>
+      {% endif %}
+      <li>Marks per Correct Answer: {{ quiz.marks_correct }}</li>
+      <li>Marks per Incorrect Answer: {{ quiz.marks_incorrect }}</li>
+      <li>Unanswered questions will receive 0 marks.</li>
+      <li>You may skip questions. You can attempt the quiz only once.</li>
+    </ul>
+  </div>
+</div>
+<!-- END INSTRUCTIONS -->
+
+<div class="row">
+
+  <div class="col-12 col-lg-9 mb-3">
+    <form method="POST" action="{{ url_for('take_quiz', quiz_id=quiz.id) }}" id="quizForm" data-remaining-seconds="{{ remaining_seconds|default(0) }}" data-questions-count="{{ questions|length }}" data-quiz-id="{{ quiz.id }}" data-csrf-token="{{ csrf_token() if csrf_token is defined else '' }}">
+      {% for question in questions %}
+      <div class="question-card card mb-4 {% if not loop.first %}d-none{% endif %}" data-index="{{ loop.index }}" id="questionCard_{{ loop.index }}">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <strong>Question {{ loop.index }}</strong>
+          <button type="button" class="btn btn-sm btn-outline-danger clear-btn" data-qid="{{ question.id }}">
+            <i class="bi bi-x-circle"></i> Clear
+          </button>
+        </div>
+        <div class="card-body px-2 px-sm-3">
+          {% if question.text %}
+            <p class="card-text">{{ question.text }}</p>
+          {% endif %}
+          {% if question.image %}
+            <img src="{{ url_for('static', filename='uploads/' + question.image) }}" class="img-fluid mb-3" alt="Question Image">
+          {% endif %}
+
+          {% set saved = saved_answers[question.id|string] if saved_answers and question.id|string in saved_answers else None %}
+
+          {% for opt in ['a', 'b', 'c', 'd'] %}
+          <div class="form-check">
+            <input class="form-check-input option-radio" type="radio"
+                   name="q_{{ question.id }}"
+                   id="q{{ question.id }}_{{ opt }}"
+                   value="{{ opt }}"
+                   {% if saved == opt %}checked{% endif %}>
+            <label class="form-check-label" for="q{{ question.id }}_{{ opt }}">
+              {{ opt|upper }}) {{ option_map[question.id][opt] }}
+            </label>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+
+    <div class="d-flex justify-content-between flex-wrap gap-2 mt-3">
+      <button type="button" class="btn btn-outline-secondary flex-fill" id="prevBtn">⬅ Prev</button>
+      <button type="button" class="btn btn-outline-secondary flex-fill" id="nextBtn">Next ➡</button>
+    </div>
+
+      <div class="text-center mt-4">
+        <button type="submit" class="btn btn-primary">Submit Quiz</button>
+      </div>
+    </form>
+  </div>
+  <div class="col-12 col-lg-3 mb-3">
+
+    <h5 class="mb-3">Navigation</h5>
+    <div id="questionNav" class="d-grid gap-2 grid-cols-5 grid-cols-sm-10">
+      {% for question in questions %}
+      {% set is_answered = saved_answers and question.id|string in saved_answers %}
+      <button type="button" 
+              class="btn btn-outline-secondary nav-btn {% if is_answered %}answered{% endif %}" 
+              data-index="{{ loop.index }}" 
+              id="navBtn_{{ question.id }}"
+              data-question-id="{{ question.id }}">
+        Q{{ loop.index }}
+      </button>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<style>
+
+  #questionNav {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  #questionNav .btn {
+    padding: 0.5rem;
+    font-size: 0.9rem;
+    text-align: center;
+  }
+
+#timer {
+  font-size: 16px;
+}
+
+@media (max-width: 576px) {
+  #timer {
+    font-size: 14px;
+  }
+}
+
+  .nav-btn.answered { 
+    background-color: #d1e7dd; 
+    border-color: #0f5132; 
+    color: #0f5132; 
+    font-weight: bold;
+  }
+  .nav-btn.current { 
+    border: 2px solid #0d6efd; 
+    position: relative;
+    z-index: 1;
+  }
+
+  @media (max-width: 576px) {
+  .form-check-label {
+    font-size: 15px;
+    padding-left: 8px;
+  }
+  .form-check-input {
+    transform: scale(1.2);
+    margin-top: 6px;
+  }
+}
+
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const quizForm = document.getElementById('quizForm');
+    if (!quizForm) return;
+
+    let totalSeconds = parseInt(quizForm.dataset.remainingSeconds, 10);
+    const totalQuestions = parseInt(quizForm.dataset.questionsCount, 10);
+    const quizId = quizForm.dataset.quizId;
+    const csrfToken = quizForm.dataset.csrfToken;
+    let currentIndex = 1;
+
+    function showQuestion(index) {
+      document.querySelectorAll('.question-card').forEach(card => card.classList.add('d-none'));
+      const currentCard = document.querySelector(`#questionCard_${index}`);
+      if(currentCard) currentCard.classList.remove('d-none');
+      
+      const qIndex = document.getElementById('currentQuestionIndex');
+      if(qIndex) qIndex.textContent = index;
+
+      document.querySelectorAll('#questionNav .nav-btn').forEach(btn => btn.classList.remove('current'));
+      const currentNavBtn = document.querySelector(`#questionNav .nav-btn[data-index="${index}"]`);
+      if(currentNavBtn) currentNavBtn.classList.add('current');
+    }
+
+    function updateTimer() {
+      const countdownElement = document.getElementById("countdown");
+      if (!countdownElement) return;
+      
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      countdownElement.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+      
+      // Add warning class when less than 5 minutes remain
+      if (totalSeconds <= 300) { // 5 minutes = 300 seconds
+        countdownElement.classList.remove('text-primary');
+        countdownElement.classList.add('time-warning');
+      } else {
+        countdownElement.classList.remove('time-warning');
+        countdownElement.classList.add('text-primary');
+      }
+      
+      if (totalSeconds <= 0) {
+        clearInterval(timerInterval);
+        countdownElement.textContent = "Time's up!";
+        // Auto-submit the form when time is up
+        document.getElementById("quizForm")?.submit();
+      } else {
+        totalSeconds--;
+      }
+    }
+
+    // Initialize timer if totalSeconds is defined
+    let timerInterval;
+    if (typeof totalSeconds !== 'undefined' && totalSeconds > 0) {
+        updateTimer();
+        timerInterval = setInterval(updateTimer, 1000);
+        
+        // Clean up interval when the page is unloaded
+        window.addEventListener('beforeunload', function() {
+            if (timerInterval) clearInterval(timerInterval);
+        });
+    }
+
+    function goTo(index) {
+      if (index >= 1 && index <= totalQuestions) {
+        currentIndex = index;
+        showQuestion(currentIndex);
+      }
+    }
+
+    document.getElementById("prevBtn")?.addEventListener("click", () => goTo(currentIndex - 1));
+    document.getElementById("nextBtn")?.addEventListener("click", () => goTo(currentIndex + 1));
+    document.querySelectorAll(".nav-btn").forEach(btn => {
+      btn.addEventListener("click", () => goTo(parseInt(btn.dataset.index)));
+    });
+
+    function saveAnswer(qid, selected_option = null) {
+      fetch("/save_answer", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrfToken
+        },
+        body: JSON.stringify({ quiz_id: quizId, question_id: qid, selected_option: selected_option })
+      }).then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            const navBtn = document.querySelector(`#navBtn_${qid}`);
+            if (navBtn) {
+              if (selected_option) {
+                navBtn.classList.add('answered');
+              } else {
+                navBtn.classList.remove('answered');
+              }
+            }
+          }
+        });
+    }
+
+    document.querySelectorAll('.option-radio').forEach(input => {
+      input.addEventListener("click", function () {
+        const name = this.name;
+        const qid = name.split("_")[1];
+
+        if (this.dataset.waschecked === "true") {
+          this.checked = false;
+          this.dataset.waschecked = "false";
+          saveAnswer(qid, null);
+          return;
+        }
+        document.querySelectorAll(`input[name="${name}"]`).forEach(el => el.dataset.waschecked = "false");
+        this.dataset.waschecked = "true";
+        saveAnswer(qid, this.value);
+        document.getElementById(`navBtn_${qid}`)?.classList.add("answered");
+      });
+    });
+
+    document.querySelectorAll(".clear-btn").forEach(btn => {
+      btn.addEventListener("click", function () {
+        const qid = this.dataset.qid;
+        document.querySelectorAll(`input[name="q_${qid}"]`).forEach(input => {
+          input.checked = false;
+          input.dataset.waschecked = "false";
+        });
+        saveAnswer(qid, null);
+        document.getElementById(`navBtn_${qid}`)?.classList.remove("answered");
+      });
+    });
+
+    let pollInterval = setInterval(() => {
+        fetch(`/quiz/${quizId}/check_update`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.reload) {
+                    clearInterval(pollInterval);
+                    const changed = data.changed_indexes?.join(', ') || 'some questions';
+                    const msg = `⚠️ Question(s) ${changed} were updated by the professor.\n\nDo you want to reload now to see changes?`;
+                    if (confirm(msg)) {
+                        fetch(`/quiz/${quizId}/mark_seen`, {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "X-CSRFToken": csrfToken
+                            },
+                            body: JSON.stringify({ questions_seen: data.changed_questions || [] })
+                        }).then(() => location.reload());
+                    }
+                }
+            })
+            .catch(err => console.warn("Polling error:", err));
+    }, 10000);
+
+    function handleBeforeUnload(e) {
+      e.preventDefault();
+      e.returnValue = "⚠️ You have an ongoing quiz. Leave this page?";
+    }
+    
+    quizForm.addEventListener("submit", () => {
+      clearInterval(pollInterval);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    });
+});
+</script>
+{% endblock %}

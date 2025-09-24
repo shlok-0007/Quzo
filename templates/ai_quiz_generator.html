@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}AI Quiz Generator{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="text-center mb-5">
+        <h2 class="display-5">AI-Powered Quiz Generator</h2>
+        <p class="lead text-muted">Generate engaging multiple-choice questions on any topic using the power of Gemini AI.</p>
+        <div class="alert alert-info text-start">
+            <h6><i class="fas fa-lightbulb"></i> Tips for better results:</h6>
+            <ul class="mb-0">
+                <li>Be specific with your topic (e.g., "Python functions and loops" instead of just "Python")</li>
+                <li>Try topics like "Data Structures", "Machine Learning basics", "World History", etc.</li>
+                <li>The AI will generate diverse question types automatically</li>
+                <li>You can select which questions to include in your final quiz</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Step 1: Topic Input Form -->
+    <div class="card shadow-lg border-0 mb-5">
+        <div class="card-body p-5">
+            <form action="{{ url_for('ai_quiz_generator') }}" method="POST" id="generateForm">
+                <input type="hidden" name="action" value="generate">
+                <div class="mb-3">
+                    <label for="topic" class="form-label fs-5">Enter a topic for your quiz:</label>
+                    <input type="text" class="form-control form-control-lg" id="topic" name="topic" placeholder="e.g., 'Python Programming Basics' or 'World War II'" required>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="num_questions" class="form-label">Number of Questions:</label>
+                        <select class="form-select" id="num_questions" name="num_questions" required>
+                            <option value="5">5</option>
+                            <option value="10" selected>10</option>
+                            <option value="15">15</option>
+                            <option value="20">20</option>
+                            <option value="25">25</option>
+                            <option value="30">30</option>
+                            <option value="35">35</option>
+                            <option value="40">40</option>
+                            <option value="45">45</option>
+                            <option value="50">50</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="difficulty" class="form-label">Difficulty Level:</label>
+                        <select class="form-select" id="difficulty" name="difficulty" required>
+                            <option value="easy">Easy</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="hard">Hard</option>
+                            <option value="mixed">Mixed (All Levels)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <span id="generateButtonText">Generate Questions</span>
+                        <div id="loadingSpinner" class="spinner-border spinner-border-sm d-none" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Step 2: Display Generated Questions and Create Quiz Form -->
+    {% if questions %}
+    <div id="questions-section">
+        <h3 class="mb-4 text-center">Generated Questions</h3>
+        <p class="text-center text-muted">Select the questions you want to include in your new quiz.</p>
+        <form action="{{ url_for('ai_quiz_generator') }}" method="POST">
+            <input type="hidden" name="action" value="create_quiz">
+            
+            <!-- Quiz Details -->
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="quiz_title" class="form-label">Quiz Title</label>
+                            <input type="text" class="form-control" id="quiz_title" name="quiz_title" value="{{ topic }} Quiz" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="time_limit" class="form-label">Time Limit (minutes)</label>
+                            <input type="number" class="form-control" id="time_limit" name="time_limit" value="10" min="1">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="marks_correct" class="form-label">Marks per Correct Answer</label>
+                            <input type="number" step="0.1" class="form-control" name="marks_correct" id="marks_correct" value="4" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="marks_incorrect" class="form-label">Negative Marks per Wrong Answer</label>
+                            <input type="number" step="0.1" class="form-control" name="marks_incorrect" id="marks_incorrect" value="-1" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="access_code" class="form-label">Access Code (optional)</label>
+                            <input type="text" class="form-control" name="access_code" id="access_code" placeholder="e.g. QUIZ2025">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Generated Questions -->
+            {% for question in questions %}
+            <div class="card mb-3 quiz-card">
+                <div class="card-body">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="selected_questions" value="{{ loop.index0 }}" id="q-{{ loop.index0 }}" checked>
+                        <label class="form-check-label fw-bold" for="q-{{ loop.index0 }}">
+                            {{ question.question_text }}
+                        </label>
+                        <!-- Hidden input to store the full question data -->
+                        <input type="hidden" name="question_data_{{ loop.index0 }}" value='{{ question | tojson }}'>
+                    </div>
+                    <ul class="list-group list-group-flush mt-2">
+                        {% for option in question.options %}
+                        <li class="list-group-item {% if option == question.correct_answer %}list-group-item-success{% endif %}">
+                            {{ option }}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endfor %}
+            
+            <div class="d-grid mt-4">
+                <button type="submit" class="btn btn-success btn-lg">Create Quiz from Selected Questions</button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const generateForm = document.getElementById('generateForm');
+    if (generateForm) {
+        generateForm.addEventListener('submit', function() {
+            document.getElementById('generateButtonText').classList.add('d-none');
+            document.getElementById('loadingSpinner').classList.remove('d-none');
+            
+            // Add a timeout warning after 30 seconds
+            setTimeout(function() {
+                if (!document.getElementById('loadingSpinner').classList.contains('d-none')) {
+                    const warningDiv = document.createElement('div');
+                    warningDiv.className = 'alert alert-warning mt-3';
+                    warningDiv.innerHTML = 'Generation is taking longer than expected. Please wait...';
+                    generateForm.appendChild(warningDiv);
+                }
+            }, 30000);
+        });
+    }
+    
+    // Add select all/none functionality for questions
+    const questionsSection = document.getElementById('questions-section');
+    if (questionsSection) {
+        const selectAllBtn = document.createElement('button');
+        selectAllBtn.type = 'button';
+        selectAllBtn.className = 'btn btn-outline-primary btn-sm me-2 mb-3';
+        selectAllBtn.textContent = 'Select All';
+        selectAllBtn.onclick = function() {
+            const checkboxes = document.querySelectorAll('input[name="selected_questions"]');
+            checkboxes.forEach(cb => cb.checked = true);
+        };
+        
+        const selectNoneBtn = document.createElement('button');
+        selectNoneBtn.type = 'button';
+        selectNoneBtn.className = 'btn btn-outline-secondary btn-sm mb-3';
+        selectNoneBtn.textContent = 'Select None';
+        selectNoneBtn.onclick = function() {
+            const checkboxes = document.querySelectorAll('input[name="selected_questions"]');
+            checkboxes.forEach(cb => cb.checked = false);
+        };
+        
+        const firstCard = questionsSection.querySelector('.card');
+        if (firstCard) {
+            const buttonContainer = document.createElement('div');
+            buttonContainer.className = 'mb-3';
+            buttonContainer.appendChild(selectAllBtn);
+            buttonContainer.appendChild(selectNoneBtn);
+            questionsSection.insertBefore(buttonContainer, firstCard);
+        }
+    }
+});
+</script>
+{% endblock %}

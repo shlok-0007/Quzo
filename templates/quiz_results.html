@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+  <div class="row justify-content-center">
+    <div class="col-lg-10">
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white">
+          <h3 class="mb-0">Quiz Results: {{ quiz.title }}</h3>
+        </div>
+        <div class="card-body">
+          <div class="alert alert-info">
+            <h4 class="alert-heading">Your Score: {{ result.score }} out of {{ result.total_questions * quiz.marks_correct }}</h4>
+            <p class="mb-2">Submitted on: {{ result.submitted_at.strftime('%B %d, %Y at %I:%M %p') }}</p>
+            <hr>
+            <p class="mb-0">
+              {% set percentage = (result.score / (result.total_questions * quiz.marks_correct) * 100)|round(2) %}
+              {% if percentage >= 80 %}
+                🎉 Excellent work! You scored {{ percentage }}%.
+              {% elif percentage >= 60 %}
+                👍 Good job! You scored {{ percentage }}%.
+              {% else %}
+                💪 Keep practicing! You scored {{ percentage }}%.
+              {% endif %}
+            </p>
+          </div>
+          
+          <div class="d-flex justify-content-between align-items-center mt-4">
+            <a href="{{ url_for('student_dashboard') }}" class="btn btn-secondary">
+              <i class="bi bi-arrow-left"></i> Back to Dashboard
+            </a>
+            <a href="#" class="btn btn-outline-primary" onclick="window.print()">
+              <i class="bi bi-printer"></i> Print Results
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {% for question in questions %}
+      <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Question {{ loop.index }}</h5>
+          <span class="badge {% if question.id|string in result.answers and result.answers[question.id|string] == question.correct_answer %}
+                            bg-success
+                          {% elif question.id|string in result.answers %}
+                            bg-danger
+                          {% else %}
+                            bg-secondary
+                          {% endif %}">
+            {% if question.id|string in result.answers and result.answers[question.id|string] == question.correct_answer %}
+              Correct
+            {% elif question.id|string in result.answers %}
+              Incorrect
+            {% else %}
+              Not Attempted
+            {% endif %}
+          </span>
+        </div>
+        <div class="card-body">
+          <h6 class="card-subtitle mb-3 text-muted">{{ question.text }}</h6>
+          {% if question.image %}
+          <div class="mb-3 text-center">
+            <img src="{{ url_for('static', filename='uploads/' + question.image) }}" class="img-fluid rounded" style="max-height: 200px;">
+          </div>
+          {% endif %}
+          
+          <div class="list-group">
+            {% for opt in ['a', 'b', 'c', 'd'] %}
+            <div class="list-group-item {% if question.correct_answer == opt %}
+                                      list-group-item-success
+                                    {% elif result.answers and question.id|string in result.answers and result.answers[question.id|string] == opt and result.answers[question.id|string] != question.correct_answer %}
+                                      list-group-item-danger
+                                    {% endif %}">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" disabled 
+                       {% if result.answers and question.id|string in result.answers and result.answers[question.id|string] == opt %}checked{% endif %}>
+                <label class="form-check-label w-100">
+                  <strong>{{ opt|upper }})</strong> {{ option_map[question.id][opt] }}
+                  {% if question.correct_answer == opt %}
+                    <span class="badge bg-success float-end">Correct Answer</span>
+                  {% elif result.answers and question.id|string in result.answers and result.answers[question.id|string] == opt and result.answers[question.id|string] != question.correct_answer %}
+                    <span class="badge bg-danger float-end">Your Answer</span>
+                  {% endif %}
+                </label>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          
+          {% if question.id|string in result.answers and result.answers[question.id|string] != question.correct_answer %}
+          <div class="alert alert-warning mt-3">
+            <strong>Explanation:</strong> {{ question.explanation or 'No explanation provided.' }}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+      
+      <div class="d-grid gap-2 d-md-flex justify-content-md-end mb-5">
+        <a href="{{ url_for('student_dashboard') }}" class="btn btn-primary">
+          <i class="bi bi-house"></i> Return to Dashboard
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

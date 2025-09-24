@@ -1,0 +1,329 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .register-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 90vh;
+        padding: 20px 15px;
+        margin: 0 auto;
+        max-width: 100%;
+    }
+
+    .register-card {
+        background: var(--dark-gray);
+        padding: 30px 20px;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+        width: 100%;
+        max-width: 500px;
+        animation: slideFadeIn 0.5s ease;
+        margin: 0 15px;
+    }
+
+    .register-card h2 {
+        text-align: center;
+        font-weight: 700;
+        margin: 0 0 25px 0;
+        font-size: 1.75rem;
+        color: var(--text-primary);
+    }
+    
+    @media (max-width: 576px) {
+        .register-wrapper {
+            padding: 15px 10px;
+            min-height: 85vh;
+        }
+        
+        .register-card {
+            padding: 25px 15px;
+            border-radius: 10px;
+        }
+        
+        .register-card h2 {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+        }
+        
+        .form-label {
+            font-size: 0.95rem;
+            margin-bottom: 6px;
+        }
+        
+        .form-control, .form-select {
+            padding: 10px 12px;
+            font-size: 0.95rem;
+        }
+        
+        .btn-register {
+            padding: 10px 15px;
+            font-size: 1rem;
+        }
+        
+        .login-link {
+            font-size: 0.95rem;
+            margin-top: 20px;
+        }
+    }
+
+    .form-label {
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-bottom: 8px;
+    }
+
+    .form-control, .form-select {
+        border-radius: 12px;
+        padding: 10px 14px;
+        font-size: 1rem;
+    }
+
+    .btn-register {
+        background: var(--primary);
+        border: none;
+        padding: 12px 30px;
+        font-weight: 600;
+        color: white;
+        border-radius: 10px;
+        width: 100%;
+        font-size: 1.1rem;
+        transition: all 0.3s;
+    }
+
+    .btn-register:hover {
+        background: var(--primary-light);
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(124, 77, 255, 0.3);
+    }
+
+    .login-link {
+        text-align: center;
+        margin-top: 25px;
+        color: var(--text-secondary);
+        font-weight: 500;
+    }
+
+    .login-link a {
+        color: var(--primary-light);
+        font-weight: 500;
+        text-decoration: none;
+        transition: all 0.3s;
+    }
+
+    .login-link a:hover {
+        text-decoration: underline;
+    }
+
+    @keyframes slideFadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+
+<div class="register-wrapper">
+    <div class="register-card">
+        <div class="text-center mb-4">
+            <div class="d-flex justify-content-center align-items-center mb-3">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="me-2">
+                    <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 20C7.59 20 4 16.41 4 12C4 7.59 7.59 4 12 4C16.41 4 20 7.59 20 12C20 16.41 16.41 20 12 20Z" fill="#4f46e5"/>
+                    <path d="M13 7H11V13H17V11H13V7Z" fill="#4f46e5"/>
+                    <path d="M13 15H11V17H13V15Z" fill="#4f46e5"/>
+                </svg>
+                <h2 class="m-0">Quzo</h2>
+            </div>
+            <h4 class="text-muted">Create your account</h4>
+        </div>
+        <form method="POST" action="{{ url_for('register') }}">
+            <div class="mb-3">
+                <label for="username" class="form-label">Username</label>
+                <input type="text" class="form-control" id="username" name="username" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="email" class="form-label">Email address</label>
+                <input type="email" class="form-control" id="email" name="email" required>
+            </div>
+
+            <div class="mb-3">
+                <label for="password" class="form-label">Password</label>
+                <input type="password" class="form-control" id="password" name="password" 
+                       pattern="^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':&quot;\\|,.&lt;&gt;\/?`~]).{8,}$"
+                       title="Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character"
+                       oninput="validatePassword()" required>
+                <div class="form-text mb-2">
+                    <small>Password must contain:</small>
+                </div>
+                <div id="password-requirements" class="small text-muted mb-2">
+                    <div class="d-flex align-items-center mb-1">
+                        <i class="bi bi-circle me-2"></i>
+                        <span>At least 8 characters</span>
+                    </div>
+                    <div class="d-flex align-items-center mb-1">
+                        <i class="bi bi-circle me-2"></i>
+                        <span>At least one uppercase letter</span>
+                    </div>
+                    <div class="d-flex align-items-center mb-1">
+                        <i class="bi bi-circle me-2"></i>
+                        <span>At least one lowercase letter</span>
+                    </div>
+                    <div class="d-flex align-items-center mb-1">
+                        <i class="bi bi-circle me-2"></i>
+                        <span>At least one number</span>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-circle me-2"></i>
+                        <span>At least one special character</span>
+                    </div>
+                </div>
+                <div id="password-strength" class="mt-2"></div>
+            </div>
+
+            <div class="mb-3">
+                <label for="confirm_password" class="form-label">Confirm Password</label>
+                <input type="password" class="form-control" id="confirm_password" name="confirm_password" 
+                       oninput="validatePassword()" required>
+                <div id="password-match" class="invalid-feedback">
+                    Passwords do not match
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label for="role" class="form-label">Register as:</label>
+                <select class="form-select" id="role" name="role" required>
+                    <option selected disabled value="">Choose...</option>
+                    <option value="student">Student</option>
+                    <option value="professor">Professor</option>
+                </select>
+            </div>
+
+            <div class="mb-4">
+                <label for="security_question" class="form-label">Security Question (for password recovery)</label>
+                <select class="form-select" id="security_question" name="security_question" required>
+                    <option selected disabled value="">Select a security question...</option>
+                    {% for code, question in security_questions %}
+                    <option value="{{ code }}">{{ question }}</option>
+                    {% endfor %}
+                </select>
+                <div class="form-text">You'll need to answer this question if you forget your password.</div>
+            </div>
+
+            <div class="mb-4">
+                <label for="security_answer" class="form-label">Your Answer</label>
+                <input type="text" class="form-control" id="security_answer" name="security_answer" required>
+                <div class="form-text">Remember this answer. It's case-insensitive but must be exact otherwise.</div>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">Register</button>
+        </form>
+
+        <script>
+        function validatePassword() {
+            const password = document.getElementById('password');
+            const confirmPassword = document.getElementById('confirm_password');
+            const strengthMeter = document.getElementById('password-strength');
+            const matchMessage = document.getElementById('password-match');
+            const requirements = document.getElementById('password-requirements');
+            
+            // Password strength validation
+            const hasMinLength = password.value.length >= 8;
+            const hasUpperCase = /[A-Z]/.test(password.value);
+            const hasLowerCase = /[a-z]/.test(password.value);
+            const hasNumbers = /\d/.test(password.value);
+            const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password.value);
+            
+            let strength = 0;
+            let messages = [];
+            
+            if (hasMinLength) strength++;
+            if (hasUpperCase) strength++;
+            if (hasLowerCase) strength++;
+            if (hasNumbers) strength++;
+            if (hasSpecial) strength++;
+            
+            // Update requirements checklist
+            if (password.value.length > 0) {
+                const requirementIcons = requirements.getElementsByTagName('i');
+                const requirementTexts = [
+                    hasMinLength ? 'bi-check-circle-fill text-success' : 'bi-circle',
+                    hasUpperCase ? 'bi-check-circle-fill text-success' : 'bi-circle',
+                    hasLowerCase ? 'bi-check-circle-fill text-success' : 'bi-circle',
+                    hasNumbers ? 'bi-check-circle-fill text-success' : 'bi-circle',
+                    hasSpecial ? 'bi-check-circle-fill text-success' : 'bi-circle'
+                ];
+                
+                for (let i = 0; i < requirementIcons.length; i++) {
+                    requirementIcons[i].className = `bi ${requirementTexts[i]} me-2`;
+                }
+                
+                // Update strength meter
+                const strengthText = ['Very Weak', 'Weak', 'Fair', 'Good', 'Strong', 'Very Strong'][strength];
+                const strengthClass = ['danger', 'warning', 'info', 'success', 'success', 'success'][strength];
+                strengthMeter.innerHTML = `
+                    <div class="progress" style="height: 5px; margin-top: 5px;">
+                        <div class="progress-bar bg-${strengthClass}" role="progressbar" 
+                             style="width: ${(strength / 5) * 100}%" 
+                             aria-valuenow="${strength}" aria-valuemin="0" aria-valuemax="5">
+                        </div>
+                    </div>
+                    <small class="text-${strengthClass}">${strengthText} Password</small>
+                `;
+            } else {
+                // Reset all icons to empty circles
+                const requirementIcons = requirements.getElementsByTagName('i');
+                for (let i = 0; i < requirementIcons.length; i++) {
+                    requirementIcons[i].className = 'bi bi-circle me-2';
+                }
+                strengthMeter.innerHTML = '';
+            }
+            
+            // Check if passwords match
+            if (confirmPassword.value !== '') {
+                if (password.value === confirmPassword.value) {
+                    confirmPassword.classList.remove('is-invalid');
+                    confirmPassword.classList.add('is-valid');
+                    matchMessage.style.display = 'none';
+                } else {
+                    confirmPassword.classList.remove('is-valid');
+                    confirmPassword.classList.add('is-invalid');
+                    matchMessage.style.display = 'block';
+                }
+            } else {
+                confirmPassword.classList.remove('is-valid', 'is-invalid');
+                matchMessage.style.display = 'none';
+            }
+            
+            return password.value === confirmPassword.value;
+        }
+        
+        // Add form validation
+        document.querySelector('form').addEventListener('submit', function(event) {
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirm_password').value;
+            
+            if (password !== confirmPassword) {
+                event.preventDefault();
+                document.getElementById('confirm_password').classList.add('is-invalid');
+                document.getElementById('password-match').style.display = 'block';
+                return false;
+            }
+            
+            // Additional validation if needed
+            return true;
+        });
+        </script>
+
+        <div class="login-redirect">
+            Already have an account? <a href="{{ url_for('login') }}">Login here</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
