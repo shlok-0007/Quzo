@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Regrade Logs - {{ quiz.title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <h2 class="mb-0">Regrade Logs: {{ quiz.title }}</h2>
+        <a href="{{ url_for('view_quiz_results', quiz_id=quiz.id) }}" class="btn btn-secondary">Back to Results</a>
+    </div>
+
+    {% if logs %}
+    <div class="table-responsive">
+        <table class="table table-striped table-bordered align-middle">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Student</th>
+                    <th>Old Score</th>
+                    <th>New Score</th>
+                    <th>Regraded By</th>
+                    <th>Timestamp</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>
+                        {{ user_map.get(log.student_id, log.student_id) }}
+                    </td>
+                    <td>{{ log.old_score }}</td>
+                    <td>{{ log.new_score }}</td>
+                    <td>{{ user_map.get(log.regraded_by, log.regraded_by) }}</td>
+                    <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M') if log.timestamp else '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info">No regrades have been recorded for this quiz yet.</div>
+    {% endif %}
+</div>
+{% endblock %}

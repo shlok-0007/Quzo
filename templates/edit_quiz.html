@@ -64,7 +64,7 @@
             <label for="q{{ question.id }}_image" class="form-label">Question Image (optional)</label>
             {% if question.image %}
                 <div>
-                    <img src="{{ url_for('static', filename='uploads/' + question.image) }}" class="img-thumbnail mb-2" width="200">
+                    <img src="{{ url_for('uploaded_file', filename=question.image) }}" class="img-thumbnail mb-2" width="200">
                 </div>
             {% endif %}
             <input type="file" class="form-control" name="q{{ question.id }}_image" id="q{{ question.id }}_image">

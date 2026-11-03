@@ -22,6 +22,7 @@ wheels/
 
 # Virtual Environment
 venv/
+.venv/
 env/
 ENV/
 
@@ -93,3 +94,23 @@ instance/
 
 # Flask migrations (if you want to include them, remove this line)
 # migrations/
+
+# Secrets (never commit API keys)
+api_keys.json
+.env
+.env.*
+!.env.example
+
+# Vercel
+.vercel/
+
+# Runtime uploads (question images)
+static/uploads/*
+!static/uploads/.gitkeep
+
+# Local feedback log
+feedback.log
+
+# OS / editor noise
+Thumbs.db
+.DS_Store

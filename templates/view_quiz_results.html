@@ -213,13 +213,18 @@ function exportToCSV() {
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
   link.download = "{{ quiz.title | replace(' ', '_') }}_results.csv";
+  document.body.appendChild(link);
   link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(link.href);
 }
 const isDarkMode = document.body.classList.contains('dark-mode');
 
 // PIE CHART - Score Breakdown (per student)
 chartData.forEach((student, index) => {
-  const ctx = document.getElementById('chart_' + (index + 1)).getContext('2d');
+  const canvasEl = document.getElementById('chart_' + (index + 1));
+  if (!canvasEl) return;
+  const ctx = canvasEl.getContext('2d');
   new Chart(ctx, {
     type: 'pie',
     data: {
@@ -262,7 +267,8 @@ const incorrect = questionStats.map(q => q.incorrect);
 const unanswered = questionStats.map(q => q.unanswered);
 
 
-new Chart(document.getElementById('questionPerformanceChart'), {
+const questionChartEl = document.getElementById('questionPerformanceChart');
+if (questionChartEl) new Chart(questionChartEl, {
   type: 'bar',
   data: {
     labels: labels,
@@ -330,7 +336,8 @@ percentages.forEach(p => {
   else gradeBuckets.F++;
 });
 
-new Chart(document.getElementById('pieChart'), {
+const gradeChartEl = document.getElementById('pieChart');
+if (gradeChartEl) new Chart(gradeChartEl, {
   type: 'pie',
   data: {
     labels: Object.keys(gradeBuckets),

@@ -57,7 +57,7 @@
 <div class="row">
 
   <div class="col-12 col-lg-9 mb-3">
-    <form method="POST" action="{{ url_for('take_quiz', quiz_id=quiz.id) }}" id="quizForm" data-remaining-seconds="{{ remaining_seconds|default(0) }}" data-questions-count="{{ questions|length }}" data-quiz-id="{{ quiz.id }}" data-csrf-token="{{ csrf_token() if csrf_token is defined else '' }}">
+    <form method="POST" action="{{ url_for('take_quiz', quiz_id=quiz.id) }}" id="quizForm" data-remaining-seconds="{{ remaining_seconds|default(0, true) }}" data-questions-count="{{ questions|length }}" data-quiz-id="{{ quiz.id }}" data-csrf-token="{{ csrf_token() if csrf_token is defined else '' }}">
       {% for question in questions %}
       <div class="question-card card mb-4 {% if not loop.first %}d-none{% endif %}" data-index="{{ loop.index }}" id="questionCard_{{ loop.index }}">
         <div class="card-header d-flex justify-content-between align-items-center">
@@ -71,7 +71,7 @@
             <p class="card-text">{{ question.text }}</p>
           {% endif %}
           {% if question.image %}
-            <img src="{{ url_for('static', filename='uploads/' + question.image) }}" class="img-fluid mb-3" alt="Question Image">
+            <img src="{{ url_for('uploaded_file', filename=question.image) }}" class="img-fluid mb-3" alt="Question Image">
           {% endif %}
 
           {% set saved = saved_answers[question.id|string] if saved_answers and question.id|string in saved_answers else None %}
@@ -327,7 +327,10 @@ document.addEventListener('DOMContentLoaded', function() {
       e.preventDefault();
       e.returnValue = "⚠️ You have an ongoing quiz. Leave this page?";
     }
-    
+
+    // Actually register the warning. It is removed again on submit.
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
     quizForm.addEventListener("submit", () => {
       clearInterval(pollInterval);
       window.removeEventListener("beforeunload", handleBeforeUnload);

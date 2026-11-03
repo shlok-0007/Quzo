@@ -19,7 +19,7 @@
     <p><strong>Q{{ loop.index }}:</strong> {{ q.text }}</p>
 
     {% if q.image %}
-    <img src="{{ url_for('static', filename='uploads/' + q.image) }}" alt="Question Image" class="img-fluid mb-2 rounded border">
+    <img src="{{ url_for('uploaded_file', filename=q.image) }}" alt="Question Image" class="img-fluid mb-2 rounded border">
     {% endif %}
 
     <ul class="list-group">

@@ -1,0 +1,26 @@
+# Never upload local environments or runtime artifacts to Vercel.
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.db
+*.sqlite
+instance/
+.vercel/
+.env
+.env.*
+!.env.example
+api_keys.json
+feedback.log
+static/uploads/*
+!static/uploads/.gitkeep
+
+# Local tooling / editor files
+node_modules/
+.vscode/
+.idea/
+.git/
+.gitignore
+Thumbs.db
+.DS_Store
