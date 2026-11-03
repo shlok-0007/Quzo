@@ -76,11 +76,16 @@ You can access a live demo of this application at: [https://quzo.vercel.app](htt
 
 ## Deploying to Vercel
 
-The repository already contains everything Vercel needs:
+Vercel deploys this app using its zero-config **Flask** support:
 
-- `api/index.py` — serverless entrypoint that exports the Flask `app`
-- `vercel.json` — builds `api/index.py` with `@vercel/python` and routes all traffic to it
+- `wsgi.py` — exports the Flask `app`; Vercel detects this entrypoint automatically
 - `requirements.txt` — installed by the Python builder
+- `.vercelignore` — keeps the virtualenv, local database, and secrets out of the upload
+
+> **Important:** the Vercel project's **Framework Preset must be set to `flask`**. If it is left on "Other", Vercel treats the repo as a static site and every route returns 404. Set it under **Project → Settings → General → Framework Preset**, or with:
+> ```bash
+> vercel project update quzo --framework flask --yes
+> ```
 
 ### 1. Get a Postgres database
 
@@ -95,9 +100,7 @@ vercel            # preview deployment
 vercel --prod     # production deployment
 ```
 
-Deploy from the directory that contains `vercel.json` (the project root).
-
-Alternatively, push the repository to GitHub and import it in the Vercel dashboard. Leave the framework preset as **Other** and do not override the build/output settings.
+Deploy from the repository root. To enable automatic deployments on every push, connect the repository with `vercel git connect` or import the project in the Vercel dashboard.
 
 ### 3. Set environment variables
 
@@ -132,10 +135,9 @@ vercel env add DATABASE_URL production
 ├── config.py             # Environment-aware configuration
 ├── models.py             # SQLAlchemy models
 ├── api_utils.py          # Gemini key rotation and API helpers
-├── wsgi.py               # Generic WSGI / local runner
-├── api/index.py          # Vercel serverless entrypoint
-├── vercel.json           # Vercel build and routing config
+├── wsgi.py               # Flask entrypoint used by Vercel (exports `app`)
 ├── requirements.txt      # Python dependencies
+├── .vercelignore         # Files excluded from Vercel uploads
 ├── static/               # CSS, JS, images, uploads
 └── templates/            # Jinja2 templates
 ```
