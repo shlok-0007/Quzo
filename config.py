@@ -10,6 +10,10 @@ def _normalise_database_url(url):
     url = url.strip()
     if url.startswith('postgres://'):
         url = 'postgresql://' + url[len('postgres://'):]
+    # SQLAlchemy 2.1 defaults a bare ``postgresql://`` URL to psycopg 3, but
+    # this project installs psycopg2-binary, so pin the driver explicitly.
+    if url.startswith('postgresql://'):
+        url = 'postgresql+psycopg2://' + url[len('postgresql://'):]
     return url
 
 
