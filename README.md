@@ -4,7 +4,7 @@ A web-based quiz management system built with Flask and SQLAlchemy. Professors c
 
 ## 🚀 Live Demo
 
-You can access a live demo of this application at: [shloksitare.pythonanywhere.com](http://shloksitare.pythonanywhere.com)
+You can access a live demo of this application at: [shloksitare.pythonanywhere.com](https://quzo.vercel.app/)
 
 ## Features
 
