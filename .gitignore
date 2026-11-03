@@ -114,3 +114,5 @@ feedback.log
 # OS / editor noise
 Thumbs.db
 .DS_Store
+.env*
+!.env.example
