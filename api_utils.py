@@ -27,6 +27,12 @@ class APIKeyManager:
     # Persistence
     # ------------------------------------------------------------------
     def load_keys(self):
+        env_keys = os.environ.get('GEMINI_API_KEYS') or os.environ.get('GEMINI_API_KEY') or ''
+        configured_keys = list(dict.fromkeys(key.strip() for key in env_keys.split(',') if key.strip()))
+        if configured_keys:
+            self.data['keys'] = configured_keys
+            self._writable = False
+            return
         if os.path.exists(self.keys_file):
             try:
                 with open(self.keys_file, 'r', encoding='utf-8') as f:
@@ -38,15 +44,6 @@ class APIKeyManager:
                     }
             except (OSError, ValueError):
                 self.data = {"keys": [], "key_status": {}}
-
-        env_keys = os.environ.get('GEMINI_API_KEYS') or os.environ.get('GEMINI_API_KEY') or ''
-        for key in env_keys.split(','):
-            key = key.strip()
-            if key and key not in self.data['keys']:
-                self.data['keys'].append(key)
-                self.data['key_status'].setdefault(
-                    key, {'is_active': True, 'usage_count': 0}
-                )
 
     def save_keys(self):
         if not self._writable:
