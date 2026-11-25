@@ -3,8 +3,6 @@ import os
 import re
 from datetime import datetime
 
-import google.generativeai as genai
-
 DEFAULT_MODEL = os.environ.get('GEMINI_MODEL', 'gemini-1.5-flash')
 
 
@@ -123,6 +121,52 @@ def _extract_json(response_text):
     return json.loads(text)
 
 
+def validate_questions(questions):
+    """Validate the same MCQ format at generation and persistence boundaries."""
+    valid = []
+    seen = set()
+    for item in questions:
+        if not isinstance(item, dict):
+            continue
+        text, options, answer = (item.get(key) for key in ('question_text', 'options', 'correct_answer'))
+        if not isinstance(text, str) or not isinstance(answer, str):
+            continue
+        if not isinstance(options, list) or len(options) != 4 or any(not isinstance(option, str) for option in options):
+            continue
+        text = text.strip()
+        options = [option.strip() for option in options]
+        key = ' '.join(text.casefold().split())
+        normalized = [option.casefold() for option in options]
+        if not key or len(text) > 4000 or key in seen:
+            continue
+        if len(set(normalized)) != 4 or any(not option or len(option) > 500 or option.casefold() == 'no option' for option in options):
+            continue
+        answer = answer.strip().casefold()
+        if answer not in normalized:
+            continue
+        seen.add(key)
+        valid.append({'question_text': text, 'options': options, 'correct_answer': options[normalized.index(answer)]})
+    return valid
+
+
+def _request_questions(api_key, prompt):
+    # GenAI's convenience model uses global credentials. Pass a dedicated client
+    # through the generated SDK to keep concurrent key rotation request-scoped.
+    from google.ai import generativelanguage
+
+    client = generativelanguage.GenerativeServiceClient(client_options={'api_key': api_key})
+    model = DEFAULT_MODEL if DEFAULT_MODEL.startswith('models/') else f'models/{DEFAULT_MODEL}'
+    response = client.generate_content(
+        model=model,
+        contents=[generativelanguage.Content(parts=[generativelanguage.Part(text=prompt)])],
+        timeout=12,
+        retry=None,
+    )
+    if not response.candidates:
+        raise ValueError('No generated candidate')
+    return ''.join(part.text for part in response.candidates[0].content.parts)
+
+
 def generate_quiz_questions(topic, num_questions=10, difficulty='medium', max_retries=3):
     """Generate quiz questions using Gemini with API key rotation.
 
@@ -171,93 +215,28 @@ def generate_quiz_questions(topic, num_questions=10, difficulty='medium', max_re
     - Mixed: Distribute questions across all difficulty levels
     """
 
-    last_error = None
-    for attempt in range(max_retries):
-        api_key = None
+    best = []
+    for _ in range(max_retries):
+        api_key = key_manager.get_active_key()
+        if not api_key:
+            break
         try:
-            api_key = key_manager.get_active_key()
-            if not api_key:
-                raise RuntimeError(
-                    'No Gemini API key configured. Set GEMINI_API_KEY (or '
-                    'GEMINI_API_KEYS) in the environment.'
-                )
-
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel(DEFAULT_MODEL)
-            response = model.generate_content(prompt)
+            response = _extract_json(_request_questions(api_key, prompt))
             key_manager.mark_key_used(api_key)
-
-            questions_list = _extract_json(getattr(response, 'text', ''))
-
-            if isinstance(questions_list, dict) and 'questions' in questions_list:
-                questions_list = questions_list['questions']
-            if not isinstance(questions_list, list):
-                raise ValueError("Expected a list of questions")
-
-            validated_questions = []
-            for question in questions_list:
-                if not isinstance(question, dict):
-                    continue
-                if not all(k in question for k in ('question_text', 'options', 'correct_answer')):
-                    continue
-
-                options = question['options']
-                if isinstance(options, dict):
-                    options = list(options.values())
-                if not isinstance(options, list) or len(options) != 4:
-                    continue
-                options = [str(o).strip() for o in options]
-
-                question_text = str(question['question_text']).replace('```', '').strip()
-                if not question_text:
-                    continue
-
-                correct_answer = str(question['correct_answer']).strip()
-                if correct_answer not in options:
-                    match = next(
-                        (
-                            o
-                            for o in options
-                            if o.lower() == correct_answer.lower()
-                        ),
-                        None,
-                    )
-                    if not match:
-                        continue
-                    correct_answer = match
-
-                validated_questions.append(
-                    {
-                        'question_text': question_text,
-                        'options': options,
-                        'correct_answer': correct_answer,
-                    }
-                )
-
-            minimum = min(3, max(1, int(num_questions) // 2))
-            if len(validated_questions) >= minimum:
-                return validated_questions[: int(num_questions)]
-
-            raise ValueError(
-                f"Only {len(validated_questions)} valid questions generated, "
-                f"expected at least {minimum}"
-            )
-
-        except json.JSONDecodeError as exc:
-            last_error = exc
-            print(f"JSON parsing error on attempt {attempt + 1}: {exc}")
-        except Exception as exc:  # noqa: BLE001 - surface a useful final message
-            last_error = exc
-            error_msg = str(exc).lower()
-            print(f"Error on attempt {attempt + 1}: {exc}")
-
-            if api_key and any(
-                keyword in error_msg
-                for keyword in ('quota', 'limit', '429', 'rate limit', 'api key')
-            ):
-                key_manager.mark_key_inactive(api_key, 'quota_exceeded')
-                print(f"Marked API key as inactive: {api_key[:10]}...")
-
-    raise RuntimeError(
-        f"Failed to generate quiz questions after {max_retries} attempts: {last_error}"
-    )
+            if isinstance(response, dict):
+                response = response.get('questions')
+            if not isinstance(response, list):
+                continue
+            valid = validate_questions(response)
+            if len(valid) >= num_questions:
+                return valid[:num_questions]
+            if len(valid) > len(best):
+                best = valid
+        except Exception as error:
+            # Provider errors may contain credentials or submitted content.
+            print(f'Quiz generation failed: {type(error).__name__}')
+            if type(error).__name__ in {'ResourceExhausted', 'PermissionDenied', 'Unauthenticated'}:
+                key_manager.mark_key_inactive(api_key)
+    if best:
+        return best
+    raise RuntimeError('Question generation is unavailable.')

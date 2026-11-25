@@ -143,6 +143,7 @@
             <h4 class="text-muted">Create your account</h4>
         </div>
         <form method="POST" action="{{ url_for('register') }}">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="mb-3">
                 <label for="username" class="form-label">Username</label>
                 <input type="text" class="form-control" id="username" name="username" required>
@@ -205,23 +206,10 @@
                 </select>
             </div>
 
-            <div class="mb-4">
-                <label for="security_question" class="form-label">Security Question (for password recovery)</label>
-                <select class="form-select" id="security_question" name="security_question" required>
-                    <option selected disabled value="">Select a security question...</option>
-                    {% for code, question in security_questions %}
-                    <option value="{{ code }}">{{ question }}</option>
-                    {% endfor %}
-                </select>
-                <div class="form-text">You'll need to answer this question if you forget your password.</div>
+            <div class="mb-3">
+                <label for="professor_invite" class="form-label">Professor invitation code (professor accounts)</label>
+                <input type="password" class="form-control" id="professor_invite" name="professor_invite" autocomplete="off">
             </div>
-
-            <div class="mb-4">
-                <label for="security_answer" class="form-label">Your Answer</label>
-                <input type="text" class="form-control" id="security_answer" name="security_answer" required>
-                <div class="form-text">Remember this answer. It's case-insensitive but must be exact otherwise.</div>
-            </div>
-
             <button type="submit" class="btn btn-primary w-100">Register</button>
         </form>
 

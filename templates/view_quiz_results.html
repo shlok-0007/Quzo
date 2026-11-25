@@ -9,6 +9,7 @@
 
 {% if results %}
 <form method="POST" action="{{ url_for('release_quiz_report', quiz_id=quiz.id) }}" onsubmit="return confirm('Release reports to all students?')">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
   <button type="submit" class="btn btn-primary mb-3">📤 Release Reports to All</button>
 </form>
 
@@ -26,6 +27,7 @@
 
 <div class="text-end mb-2">
   <form method="POST" action="{{ url_for('reset_all_students', quiz_id=quiz.id) }}" onsubmit="return confirm('Are you sure you want to reset all student attempts? This action cannot be undone.')">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <button type="submit" class="btn btn-outline-danger btn-sm" data-bs-toggle="tooltip" title="Reset all student submissions. Use carefully!">
       ❌ Reset All
     </button>
@@ -58,6 +60,8 @@
 </a>
 
       <form method="POST" action="{{ url_for('reset_student_quiz', quiz_id=quiz.id, student_username=data.username) }}" onsubmit="return confirm('Reset quiz attempt for {{ data.username }}?')">
+
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-sm btn-danger">Reset</button>
       </form>
     </td>

@@ -22,6 +22,7 @@
     <div class="card shadow-lg border-0 mb-5">
         <div class="card-body p-5">
             <form action="{{ url_for('ai_quiz_generator') }}" method="POST" id="generateForm">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="action" value="generate">
                 <div class="mb-3">
                     <label for="topic" class="form-label fs-5">Enter a topic for your quiz:</label>
@@ -71,6 +72,7 @@
         <h3 class="mb-4 text-center">Generated Questions</h3>
         <p class="text-center text-muted">Select the questions you want to include in your new quiz.</p>
         <form action="{{ url_for('ai_quiz_generator') }}" method="POST">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="create_quiz">
             
             <!-- Quiz Details -->

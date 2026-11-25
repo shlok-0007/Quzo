@@ -8,6 +8,13 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 db = SQLAlchemy()
 
+
+class RequestQuota(db.Model):
+    __tablename__ = 'request_quota'
+    scope = db.Column(db.String(64), primary_key=True)
+    window = db.Column(db.Integer, nullable=False)
+    count = db.Column(db.Integer, nullable=False)
+
 # Security questions for password recovery
 SECURITY_QUESTIONS = [
     ('1', "What was your first pet's name?"),

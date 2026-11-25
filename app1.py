@@ -1,16 +1,20 @@
 import csv
+import hmac
 import io
 import json
 import os
 import random
 import re
+import secrets
+import smtplib
+import time
+from email.message import EmailMessage
 import traceback
 import uuid
 from datetime import datetime
 from functools import wraps
 from io import StringIO
 
-import google.generativeai as genai
 from flask import (
     Flask,
     abort,
@@ -26,15 +30,21 @@ from flask import (
     url_for,
 )
 from flask_migrate import Migrate
+from itsdangerous import BadData, URLSafeTimedSerializer
+from sqlalchemy import case
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects.postgresql import insert as postgres_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from werkzeug.security import generate_password_hash
 from werkzeug.utils import secure_filename
 
-from api_utils import generate_quiz_questions
+from api_utils import generate_quiz_questions, validate_questions
 from config import Config
 from models import (
-    SECURITY_QUESTIONS,
     Question,
     Quiz,
     QuizSession,
+    RequestQuota,
     RegradeLog,
     Result,
     StudentAnswer,
@@ -59,12 +69,21 @@ app.config.from_object(Config)
 db.init_app(app)
 migrate = Migrate(app, db)
 
-# Configure Gemini API only when a key is actually configured.
-if app.config.get('GEMINI_API_KEY'):
-    try:
-        genai.configure(api_key=app.config['GEMINI_API_KEY'])
-    except Exception as e:  # pragma: no cover - network/provider specific
-        print(f"Error configuring Gemini API: {e}")
+@app.template_global()
+def csrf_token():
+    if '_csrf_token' not in session:
+        session['_csrf_token'] = secrets.token_urlsafe(32)
+    return session['_csrf_token']
+
+
+@app.before_request
+def validate_csrf():
+    if request.method not in ('POST', 'PUT', 'PATCH', 'DELETE'):
+        return
+    expected = session.get('_csrf_token')
+    supplied = request.headers.get('X-CSRFToken') or request.form.get('_csrf_token', '')
+    if not expected or not supplied.isascii() or not hmac.compare_digest(expected, supplied):
+        abort(400, 'Invalid or missing request token. Reload the page and try again.')
 
 # Make sure the upload directory exists. On Vercel this points at /tmp.
 try:
@@ -120,14 +139,23 @@ def _save_upload(file_storage):
     """Save an uploaded image and return its stored filename."""
     if not file_storage or not file_storage.filename:
         return None
-    filename = secure_filename(file_storage.filename)
-    if not filename:
-        raise ValueError('Invalid file name.')
-    # Avoid collisions between professors uploading files with the same name.
-    filename = f"{uuid.uuid4().hex[:10]}_{filename}"
+    from PIL import Image
+
+    formats = {'PNG': '.png', 'JPEG': '.jpg', 'WEBP': '.webp'}
+    try:
+        with Image.open(file_storage.stream, formats=list(formats)) as image:
+            if image.width * image.height > 20_000_000:
+                raise ValueError('Question image is too large.')
+            output_format = image.format
+            # Re-encode pixels so uploaded metadata and trailing bytes are discarded.
+            pixels = image.convert('RGB')
+            pixels.info.clear()
+    except (OSError, Image.DecompressionBombError) as error:
+        raise ValueError('Upload a valid PNG, JPEG, or WebP question image.') from error
+    filename = uuid.uuid4().hex + formats[output_format]
     folder = app.config['UPLOAD_FOLDER']
     os.makedirs(folder, exist_ok=True)
-    file_storage.save(os.path.join(folder, filename))
+    pixels.save(os.path.join(folder, filename), format=output_format)
     return filename
 
 
@@ -295,11 +323,7 @@ def register():
         password = request.form.get('password') or ''
         confirm_password = request.form.get('confirm_password') or ''
         role = request.form.get('role')
-        security_question = request.form.get('security_question')
-        security_answer = (request.form.get('security_answer') or '').strip()
-
-        # Basic Validation
-        if not all([username, email, password, confirm_password, role, security_question, security_answer]):
+        if not all([username, email, password, confirm_password, role]):
             flash('All fields are required.', 'danger')
             return redirect(url_for('register'))
         if password != confirm_password:
@@ -321,24 +345,24 @@ def register():
                 'danger',
             )
             return redirect(url_for('register'))
-        if not security_question.isdigit() or int(security_question) < 1 or int(security_question) > 5:
-            flash('Please select a valid security question.', 'danger')
-            return redirect(url_for('register'))
+        if role == 'professor':
+            invitation = os.environ.get('QUZO_PROFESSOR_INVITE', '')
+            supplied = request.form.get('professor_invite', '')
+            if not invitation or not hmac.compare_digest(invitation.encode(), supplied.encode()):
+                flash('A valid professor invitation is required.', 'danger')
+                return redirect(url_for('register'))
 
         existing_user = User.query.filter((User.username == username) | (User.email == email)).first()
         if existing_user:
             flash('Username or email already exists.', 'warning')
             return redirect(url_for('register'))
 
-        # Create new user with security question and answer
         new_user = User(
             username=username,
             email=email,
             role=role,
-            security_question=security_question,
         )
         new_user.set_password(password)
-        new_user.set_security_answer(security_answer)
 
         try:
             db.session.add(new_user)
@@ -352,107 +376,132 @@ def register():
             traceback.print_exc()
             return redirect(url_for('register'))
 
-    # For GET request, pass security questions to the template
-    return render_template('register.html', security_questions=SECURITY_QUESTIONS)
+    return render_template('register.html')
+
+
+def _credential_version(user):
+    return hmac.digest(app.secret_key.encode(), user.password_hash.encode(), 'sha256').hex()
+
+
+@app.before_request
+def verify_session():
+    user_id = session.get('user_id')
+    if user_id is None:
+        return
+    user = db.session.get(User, user_id)
+    if user is None or user.role != session.get('user_role') or not hmac.compare_digest(
+        session.get('credential_version', ''), _credential_version(user)
+    ):
+        session.clear()
+        return redirect(url_for('login'))
+
+
+@app.before_request
+def enforce_request_quota():
+    limits = {
+        'login': 20,
+        'register': 12,
+        'forgot_password': 5,
+        'reset_password': 10,
+        'access_quiz': 20,
+        'enter_quiz_code': 20,
+        'ai_quiz_generator': 8,
+    }
+    endpoint = request.endpoint
+    if request.method != 'POST' or endpoint not in limits:
+        return
+    if endpoint == 'ai_quiz_generator' and request.form.get('action') != 'generate':
+        return
+    identity = request.remote_addr or 'unknown'
+    if endpoint == 'ai_quiz_generator' and session.get('user_id'):
+        identity = str(session['user_id'])
+    if endpoint == 'enter_quiz_code':
+        endpoint = 'access_quiz'
+    scope = hmac.digest(app.secret_key.encode(), f'{endpoint}:{identity}'.encode(), 'sha256').hex()
+    window = int(time.time()) // 900
+    insert = postgres_insert if db.engine.dialect.name == 'postgresql' else sqlite_insert
+    quota = RequestQuota.__table__
+    statement = insert(quota).values(scope=scope, window=window, count=1)
+    statement = statement.on_conflict_do_update(
+        index_elements=[quota.c.scope],
+        set_={
+            'window': window,
+            'count': case((quota.c.window == window, quota.c.count + 1), else_=1),
+        },
+        where=(quota.c.window < window) | (quota.c.count < limits[endpoint]),
+    ).returning(quota.c.count)
+    allowed = db.session.execute(statement).scalar_one_or_none()
+    if secrets.randbelow(100) == 0:
+        db.session.query(RequestQuota).filter(RequestQuota.window < window - 96).delete()
+    db.session.commit()
+    if allowed is None:
+        return 'Too many requests. Try again later.', 429, {'Retry-After': str(900 - int(time.time()) % 900)}
+
+
+def _recovery_serializer():
+    return URLSafeTimedSerializer(app.secret_key, salt='quzo-password-reset')
+
+
+def _send_recovery(user):
+    base = os.environ.get('QUZO_PUBLIC_URL')
+    host = os.environ.get('QUZO_SMTP_HOST')
+    sender = os.environ.get('QUZO_MAIL_FROM')
+    if not all((base, host, sender)):
+        return
+    token = _recovery_serializer().dumps([user.id, _credential_version(user)])
+    link = base.rstrip('/') + url_for('reset_password', token=token)
+    message = EmailMessage()
+    message['To'] = user.email
+    message['From'] = sender
+    message['Subject'] = 'Reset your Quzo password'
+    message.set_content(f'Reset your password within 20 minutes: {link}')
+    with smtplib.SMTP_SSL(host, int(os.environ.get('QUZO_SMTP_PORT', 465)), timeout=8) as smtp:
+        account = os.environ.get('QUZO_SMTP_USER')
+        if account:
+            smtp.login(account, os.environ.get('QUZO_SMTP_PASSWORD', ''))
+        smtp.send_message(message)
+
 
 @app.route('/forgot-password', methods=['GET', 'POST'])
 def forgot_password():
-    if 'user_id' in session:
-        return redirect(url_for('index'))
-    
     if request.method == 'POST':
-        username = (request.form.get('username') or '').strip()
-        security_answer = (request.form.get('security_answer') or '').strip()
-        new_password = request.form.get('new_password') or ''
-        confirm_password = request.form.get('confirm_password') or ''
-        
-        # Get the user and store in session
-        user = None
-        if username:
-            user = User.query.filter_by(username=username).first()
-            session['reset_username'] = username  # Store username in session
-        
-        # If coming from first form (username submission)
-        if username and not security_answer and not new_password:
-            if not user:
-                flash('No account found with that username.', 'danger')
-                return render_template('forgot_password.html')
-                
-            if not user.security_question:
-                flash('No security question set for this account. Please contact support.', 'danger')
-                return render_template('forgot_password.html')
-                
-            return render_template('forgot_password.html',
-                               show_security_question=True,
-                               username=username,
-                               security_question=next((q[1] for q in SECURITY_QUESTIONS if q[0] == user.security_question), ''))
-        
-        # If coming from security answer form
-        if security_answer and 'reset_username' in session:
-            user = User.query.filter_by(username=session['reset_username']).first()
-            if not user:
-                session.pop('reset_username', None)
-                flash('Session expired. Please start over.', 'danger')
-                return redirect(url_for('forgot_password'))
-                
-            if not user.check_security_answer(security_answer):
-                flash('Incorrect answer to security question.', 'danger')
-                return render_template('forgot_password.html',
-                                   show_security_question=True,
-                                   username=user.username,
-                                   security_question=next((q[1] for q in SECURITY_QUESTIONS if q[0] == user.security_question), ''))
-            
-            # Store verification in session
-            session['security_verified'] = True
-            return render_template('forgot_password.html',
-                               show_security_question=True,
-                               show_new_password=True,
-                               username=user.username,
-                               security_question=next((q[1] for q in SECURITY_QUESTIONS if q[0] == user.security_question), ''))
-        
-        # If submitting new password
-        if new_password and 'reset_username' in session and session.get('security_verified'):
-            user = User.query.filter_by(username=session['reset_username']).first()
-            if not user:
-                session.pop('reset_username', None)
-                session.pop('security_verified', None)
-                flash('Session expired. Please start over.', 'danger')
-                return redirect(url_for('forgot_password'))
-            
-            if new_password != confirm_password:
-                flash('Passwords do not match.', 'danger')
-            else:
-                # Validate password strength
-                if not user_utils_valid_password(new_password):
-                    flash('Password must be at least 8 characters long and include uppercase, lowercase, number, and special character.', 'danger')
-                else:
-                    user.set_password(new_password)
-                    try:
-                        db.session.commit()
-                        # Clear session data
-                        session.pop('reset_username', None)
-                        session.pop('security_verified', None)
-                        flash('Your password has been reset successfully! You can now log in with your new password.', 'success')
-                        return redirect(url_for('login'))
-                    except Exception as e:
-                        db.session.rollback()
-                        flash('An error occurred while resetting your password. Please try again.', 'danger')
-                        print(f"Password reset error: {e}")
-                        traceback.print_exc()
-            
-            return render_template('forgot_password.html',
-                               show_security_question=True,
-                               show_new_password=True,
-                               username=user.username,
-                               security_question=next((q[1] for q in SECURITY_QUESTIONS if q[0] == user.security_question), ''))
-    
-    # Clear any existing session data on initial load
-    if 'reset_username' in session:
-        session.pop('reset_username', None)
-    if 'security_verified' in session:
-        session.pop('security_verified', None)
-        
-    return render_template('forgot_password.html')
+        email = request.form.get('email', '').strip().lower()
+        user = User.query.filter_by(email=email).first()
+        if user:
+            try:
+                _send_recovery(user)
+            except (OSError, ValueError):
+                app.logger.warning('Could not deliver password recovery email')
+        flash('If this email is registered, a reset link will be sent.', 'info')
+        return redirect(url_for('forgot_password'))
+    return render_template('forgot_password.html', reset=False)
+
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    try:
+        user_id, stamp = _recovery_serializer().loads(token, max_age=1200)
+    except (BadData, ValueError, TypeError):
+        abort(400, 'Invalid or expired reset link.')
+    user = db.session.get(User, user_id)
+    if user is None or not hmac.compare_digest(stamp, _credential_version(user)):
+        abort(400, 'Invalid or expired reset link.')
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        if not user_utils_valid_password(password) or password != request.form.get('confirm_password'):
+            flash('Use matching passwords that meet the password policy.', 'danger')
+        else:
+            updated = User.query.filter_by(id=user.id, password_hash=user.password_hash).update(
+                {'password_hash': generate_password_hash(password)}
+            )
+            db.session.commit()
+            if updated != 1:
+                abort(400, 'Invalid or expired reset link.')
+            session.clear()
+            flash('Password updated. Sign in with the new password.', 'success')
+            return redirect(url_for('login'))
+    return render_template('forgot_password.html', reset=True), 200, {'Referrer-Policy': 'no-referrer'}
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -475,6 +524,8 @@ def login():
             session['user_id'] = user.id
             session['user_role'] = user.role
             session['username'] = user.username
+            session['credential_version'] = _credential_version(user)
+            session.permanent = True
             flash(f'Welcome back, {user.username}!', 'success')
             # Redirect based on role
             if user.role == 'professor':
@@ -500,7 +551,7 @@ def ai_quiz_generator():
                 topic = (request.form.get('topic') or '').strip()
                 num_questions = int(request.form.get('num_questions', 10))
                 difficulty = request.form.get('difficulty', 'medium')
-                if not topic:
+                if not topic or len(topic) > 500:
                     flash('Please enter a topic for the quiz.', 'danger')
                     return redirect(url_for('ai_quiz_generator'))
                 num_questions = max(1, min(num_questions, 50))
@@ -514,12 +565,12 @@ def ai_quiz_generator():
                     flash('No valid questions were generated. Please try again with a different topic.', 'warning')
                     return redirect(url_for('ai_quiz_generator'))
 
+                if len(questions_list) < num_questions:
+                    flash(f'Generated {len(questions_list)} valid questions out of {num_questions} requested.', 'warning')
                 return render_template('ai_quiz_generator.html', questions=questions_list, topic=topic)
 
-            except Exception as e:
-                flash(f'An error occurred while generating questions: {str(e)}', 'danger')
-                print(f"AI Generation Error: {e}")
-                traceback.print_exc()
+            except (RuntimeError, ValueError):
+                flash('Question generation is unavailable. Try again or create the quiz manually.', 'danger')
                 return redirect(url_for('ai_quiz_generator'))
 
         elif action == 'create_quiz':
@@ -556,53 +607,28 @@ def ai_quiz_generator():
                 db.session.add(new_quiz)
                 db.session.flush() # Flush to get the new_quiz.id
 
-                # Process and save the selected questions
-                questions_added = 0
-                for index in selected_indices:
+                selected = []
+                for index in selected_indices[:50]:
                     question_json = request.form.get(f'question_data_{index}')
                     if question_json:
                         try:
-                            question_data = json.loads(question_json)
-
-                            # The AI sometimes returns options as a dict instead of a list. Handle this.
-                            options = question_data.get('options', [])
-                            if isinstance(options, dict):
-                                options = list(options.values())
-                            if not isinstance(options, list):
-                                continue
-                            options = [str(o).strip() for o in options if str(o).strip()]
-
-                            # Ensure we have exactly 4 options
-                            while len(options) < 4:
-                                options.append("No option")
-                            options = options[:4]
-
-                            # Find the correct option index ('a', 'b', 'c', 'd')
-                            correct_option_text = str(question_data.get('correct_answer') or '').strip()
-                            correct_option_char = None
-                            for i, option_text in enumerate(options):
-                                if option_text.strip().lower() == correct_option_text.lower():
-                                    correct_option_char = chr(ord('a') + i)
-                                    break
-                            if correct_option_char is None:
-                                # Never silently mark a random option as correct.
-                                continue
-
-                            new_question = Question(
-                                quiz_id=new_quiz.id,
-                                text=question_data.get('question_text'),
-                                option_a=options[0],
-                                option_b=options[1],
-                                option_c=options[2],
-                                option_d=options[3],
-                                correct_option=correct_option_char
-                            )
-                            db.session.add(new_question)
-                            questions_added += 1
-                        except (json.JSONDecodeError, TypeError, ValueError) as e:
-                            print(f"Error parsing question data for index {index}: {e}")
+                            selected.append(json.loads(question_json))
+                        except (json.JSONDecodeError, TypeError, ValueError):
                             continue
 
+                questions = validate_questions(selected)
+                for question in questions:
+                    options = question['options']
+                    db.session.add(Question(
+                        quiz_id=new_quiz.id,
+                        text=question['question_text'],
+                        option_a=options[0],
+                        option_b=options[1],
+                        option_c=options[2],
+                        option_d=options[3],
+                        correct_option='abcd'[options.index(question['correct_answer'])],
+                    ))
+                questions_added = len(questions)
                 if questions_added == 0:
                     db.session.rollback()
                     flash('No valid questions could be processed. Please try again.', 'danger')
@@ -621,7 +647,7 @@ def ai_quiz_generator():
 
     return render_template('ai_quiz_generator.html')
 
-@app.route('/logout')
+@app.post('/logout')
 @login_required
 def logout():
     session.clear()
@@ -727,16 +753,41 @@ def update_access_code(quiz_id):
 def access_quiz(quiz_id):
     quiz = Quiz.query.get_or_404(quiz_id)
 
-    if quiz.access_code:
-        if request.method == 'POST':
-            entered_code = (request.form.get('access_code') or '').strip()
-            if entered_code == quiz.access_code:
-                session[f'quiz_code_passed_{quiz_id}'] = True
-                return redirect(url_for('take_quiz', quiz_id=quiz_id))
-            flash("Incorrect access code.", "danger")
-        return render_template('enter_quiz_code.html', quiz=quiz)
-
-    return redirect(url_for('take_quiz', quiz_id=quiz_id))
+    user_id = session['user_id']
+    if request.method == 'POST':
+        entered = request.form.get('access_code', '').strip()
+        if quiz.access_code and not hmac.compare_digest(entered.encode(), quiz.access_code.encode()):
+            flash('Incorrect access code.', 'danger')
+        elif quiz.deadline and datetime.utcnow() >= quiz.deadline:
+            flash('The quiz deadline has passed.', 'danger')
+        elif not quiz.questions:
+            flash('This quiz does not have any questions yet.', 'warning')
+        elif Result.query.filter_by(student_id=user_id, quiz_id=quiz.id).first():
+            return redirect(url_for('student_dashboard'))
+        else:
+            attempt = _quiz_attempt(quiz, user_id)
+            if attempt is None:
+                ids = [question.id for question in quiz.questions]
+                random.shuffle(ids)
+                db.session.add(QuizSession(
+                    student_id=user_id, quiz_id=quiz.id, saved_answers={},
+                    shuffled_question_ids=','.join(map(str, ids)),
+                    quiz_last_updated=quiz.last_updated,
+                    question_last_seen={
+                        str(question.id): question.last_updated.isoformat()
+                        for question in quiz.questions if question.last_updated
+                    },
+                ))
+                try:
+                    db.session.commit()
+                except IntegrityError:
+                    db.session.rollback()
+                    if _quiz_attempt(quiz, user_id) is None:
+                        raise
+            return redirect(url_for('take_quiz', quiz_id=quiz_id))
+    elif _quiz_attempt(quiz, user_id) is not None:
+        return redirect(url_for('take_quiz', quiz_id=quiz_id))
+    return render_template('enter_quiz_code.html', quiz=quiz)
 
 
 @app.route('/professor/quiz/<int:quiz_id>/export')
@@ -765,7 +816,8 @@ def export_quiz_results(quiz_id):
         max_marks = (total or 0) * marks_correct
         percentage = round((score / max_marks) * 100, 1) if max_marks > 0 else 0
         submitted = submitted_at.strftime('%Y-%m-%d %H:%M') if submitted_at else ''
-        writer.writerow([username, score, total, f"{percentage}%", submitted])
+        safe_username = f"'{username}" if username.lstrip().startswith(('=', '+', '-', '@', '\t', '\r', '\n')) else username
+        writer.writerow([safe_username, score, total, f"{percentage}%", submitted])
 
     output = make_response(si.getvalue())
     output.headers["Content-Disposition"] = f"attachment; filename=quiz_{quiz_id}_results.csv"
@@ -997,19 +1049,40 @@ def create_quiz():
 
 
 @app.route('/uploads/<path:filename>')
+@login_required
 def uploaded_file(filename):
     """Serve question images from the writable upload folder.
 
     Falls back to the historical ``static/uploads`` location so already
     uploaded images keep working after a deployment.
     """
-    upload_folder = current_app.config['UPLOAD_FOLDER']
-    if os.path.exists(os.path.join(upload_folder, filename)):
-        return send_from_directory(upload_folder, filename)
-    legacy_folder = os.path.join(current_app.static_folder, 'uploads')
-    if os.path.exists(os.path.join(legacy_folder, filename)):
-        return send_from_directory(legacy_folder, filename)
-    abort(404)
+    allowed_extensions = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
+    if filename != secure_filename(filename) or os.path.splitext(filename)[1].lower() not in allowed_extensions:
+        abort(404)
+    question = Question.query.filter_by(image=filename).first_or_404()
+    quiz = question.parent_quiz
+    user_id = session['user_id']
+    if session.get('user_role') == 'professor':
+        if quiz.professor_id != user_id:
+            abort(404)
+    else:
+        attempt = _quiz_attempt(quiz, user_id)
+        if attempt is None or (attempt.submitted and not quiz.report_released):
+            abort(404)
+    folder = current_app.config['UPLOAD_FOLDER']
+    if not os.path.isfile(os.path.join(folder, filename)):
+        folder = os.path.join(current_app.static_folder, 'uploads')
+    response = send_from_directory(folder, filename)
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['Cache-Control'] = 'private, no-store'
+    return response
+
+
+@app.before_request
+def protect_legacy_upload_path():
+    filename = (request.view_args or {}).get('filename', '')
+    if request.endpoint == 'static' and filename.split('/', 1)[0].lower() == 'uploads':
+        abort(404)
 
 
 # @app.route('/quiz/<int:quiz_id>/check_update')
@@ -1539,17 +1612,33 @@ def reset_all_students(quiz_id):
 @app.route('/student/quiz/<int:quiz_id>/enter_code', methods=['GET', 'POST'])
 @student_required
 def enter_quiz_code(quiz_id):
-    quiz = Quiz.query.get_or_404(quiz_id)
+    return access_quiz(quiz_id)
 
-    if request.method == 'POST':
-        entered_code = (request.form.get('access_code') or '').strip()
-        if quiz.access_code and entered_code == quiz.access_code:
-            session[f'quiz_code_passed_{quiz_id}'] = True
-            return redirect(url_for('take_quiz', quiz_id=quiz_id))
-        flash("Incorrect access code.", "danger")
 
-    return render_template("enter_quiz_code.html", quiz=quiz)
+def _quiz_attempt(quiz, student_id, *, lock=False):
+    query = QuizSession.query.filter_by(student_id=student_id, quiz_id=quiz.id)
+    if lock:
+        # PostgreSQL serializes competing writes on the same attempt.
+        if db.engine.dialect.name == 'sqlite':
+            # A no-op write acquires SQLite's transaction-wide writer lock.
+            query.update({'last_saved': QuizSession.last_saved}, synchronize_session=False)
+        else:
+            query = query.with_for_update()
+    return query.first()
 
+
+def _remaining_seconds(quiz, attempt):
+    from math import ceil
+
+    now = datetime.utcnow()
+    if quiz.deadline and now >= quiz.deadline:
+        return 0
+    limits = []
+    if quiz.deadline:
+        limits.append((quiz.deadline - now).total_seconds())
+    if quiz.time_limit and attempt.start_time:
+        limits.append(quiz.time_limit * 60 - (now - attempt.start_time).total_seconds())
+    return max(0, ceil(min(limits))) if limits else None
 
 
 @app.route('/student/quiz/<int:quiz_id>/take', methods=['GET', 'POST'])
@@ -1558,72 +1647,26 @@ def take_quiz(quiz_id):
     user_id = session.get("user_id")
     quiz = Quiz.query.get_or_404(quiz_id)
 
-    # Access-code gate: the /access route is not the only way in.
-    if quiz.access_code and not session.get(f'quiz_code_passed_{quiz_id}'):
+    quiz_session = _quiz_attempt(quiz, user_id, lock=request.method == 'POST')
+    if quiz_session is None:
         return redirect(url_for('access_quiz', quiz_id=quiz_id))
-
-    # Block if already submitted
     result = Result.query.filter_by(student_id=user_id, quiz_id=quiz_id).first()
-    if result:
-        flash("You have already taken this quiz.", "warning")
-        if quiz.report_released:
-            return redirect(url_for("student_quiz_report", quiz_id=quiz_id))
-        return redirect(url_for("student_dashboard"))
+    if result or quiz_session.submitted:
+        return redirect(url_for('quiz_results', quiz_id=quiz_id))
 
-    # Deadline check
-    if quiz.deadline and datetime.utcnow() > quiz.deadline:
-        flash("The quiz deadline has passed.", "danger")
-        return redirect(url_for("student_dashboard"))
+    remaining_seconds = _remaining_seconds(quiz, quiz_session)
+    if remaining_seconds == 0:
+        if request.method != 'POST':
+            return render_template('expired_quiz.html', quiz=quiz)
+        _finalize_attempt(user_id, quiz, quiz_session, _session_answers(quiz_session))
+        flash('Time is up. Your saved answers were submitted.', 'info')
+        return redirect(url_for('quiz_results', quiz_id=quiz_id))
 
     all_questions = list(quiz.questions)
-    total_questions = len(all_questions)
-    if total_questions == 0:
-        flash("This quiz does not have any questions yet.", "warning")
-        return redirect(url_for("student_dashboard"))
-
-    # Get/Create QuizSession
-    quiz_session = QuizSession.query.filter_by(student_id=user_id, quiz_id=quiz_id).first()
-    if not quiz_session:
-        quiz_session = QuizSession(
-            student_id=user_id,
-            quiz_id=quiz_id,
-            start_time=datetime.utcnow(),
-            saved_answers={},
-            submitted=False,
-            quiz_last_updated=quiz.last_updated,
-            question_last_seen={}
-        )
-        db.session.add(quiz_session)
-        db.session.commit()
-
-    # Prevent retake
-    if quiz_session.submitted:
-        flash("You have already submitted this quiz.", "warning")
-        return redirect(url_for("student_dashboard"))
-
-    # Remaining time logic
-    started = quiz_session.start_time or datetime.utcnow()
-    elapsed = (datetime.utcnow() - started).total_seconds()
-    remaining_seconds = max(0, int((quiz.time_limit * 60) - elapsed)) if quiz.time_limit else None
-
-    # Auto-submit if time over
-    if remaining_seconds == 0:
-        _finalize_attempt(user_id, quiz, quiz_session, _session_answers(quiz_session))
-        flash("Time is up! Your quiz was auto-submitted.", "info")
-        return redirect(url_for("quiz_results", quiz_id=quiz_id))
-
-    # Get or initialize question order
-    if not quiz_session.shuffled_question_ids:
-        question_ids = [q.id for q in random.sample(all_questions, total_questions)]
-        quiz_session.shuffled_question_ids = ",".join(map(str, question_ids))
-        db.session.commit()
-    else:
-        question_ids = []
-        for qid in quiz_session.shuffled_question_ids.split(","):
-            try:
-                question_ids.append(int(qid))
-            except (TypeError, ValueError):
-                continue
+    question_ids = [
+        int(value) for value in (quiz_session.shuffled_question_ids or '').split(',')
+        if value.isdecimal()
+    ]
 
     # Get questions in the saved order
     questions = [db.session.get(Question, qid) for qid in question_ids]
@@ -1640,7 +1683,7 @@ def take_quiz(quiz_id):
         current_saved = _session_answers(quiz_session)
         submitted_answers = {}
         for q in questions:
-            selected = (request.form.get(f"q_{q.id}") or "").strip().lower()
+            selected = (request.form.get(f"q_{q.id}") or request.form.get(f"question_{q.id}") or "").strip().lower()
             if selected not in ('a', 'b', 'c', 'd'):
                 selected = current_saved.get(str(q.id))
             if selected:
@@ -1659,15 +1702,6 @@ def take_quiz(quiz_id):
             'd': q.option_d
         } for q in questions
     }
-
-    # Update seen timestamps to prevent a reload loop
-    seen = dict(quiz_session.question_last_seen or {})
-    for q in questions:
-        seen[str(q.id)] = q.last_updated.isoformat() if q.last_updated else datetime.utcnow().isoformat()
-    quiz_session.question_last_seen = seen
-
-    quiz_session.quiz_last_updated = quiz.last_updated
-    db.session.commit()
 
     return render_template(
         "take_quiz.html",
@@ -1856,40 +1890,25 @@ def reconcile_session_with_current_questions(quiz_id):
 
 
 
-@app.route("/quiz/<int:quiz_id>/auto_submit")
+@app.post("/quiz/<int:quiz_id>/auto_submit")
 @student_required
 def auto_submit_quiz(quiz_id):
-    user_id = session.get("user_id")
     quiz = Quiz.query.get_or_404(quiz_id)
-    session_obj = QuizSession.query.filter_by(student_id=user_id, quiz_id=quiz_id).first()
-    if not session_obj or session_obj.submitted:
-        return redirect(url_for("student_dashboard"))
+    attempt = _quiz_attempt(quiz, session['user_id'], lock=True)
+    if attempt is None:
+        abort(404)
+    if not attempt.submitted:
+        if _remaining_seconds(quiz, attempt) != 0:
+            abort(409, 'The quiz has time remaining.')
+        _finalize_attempt(session['user_id'], quiz, attempt, _session_answers(attempt))
+    return redirect(url_for('quiz_results', quiz_id=quiz_id))
 
-    _finalize_attempt(user_id, quiz, session_obj, _session_answers(session_obj))
-    flash("Time is up! Your quiz was auto-submitted.", "info")
-    return redirect(url_for("quiz_results", quiz_id=quiz_id))
 
-
-@app.route("/quiz/<int:quiz_id>/autosave", methods=["POST"])
+@app.post('/quiz/<int:quiz_id>/autosave')
 @student_required
 def autosave(quiz_id):
-    user_id = session.get("user_id")
-    data = request.get_json(silent=True) or {}
-    question_id = str(data.get("question_id"))
-    selected_option = data.get("selected_option")
-
-    session_obj = QuizSession.query.filter_by(student_id=user_id, quiz_id=quiz_id).first()
-    if session_obj and not session_obj.submitted:
-        saved = _session_answers(session_obj)
-        if selected_option:
-            saved[question_id] = str(selected_option).lower()
-        else:
-            saved.pop(question_id, None)
-        session_obj.saved_answers = saved
-        session_obj.last_saved = datetime.utcnow()
-        db.session.commit()
-        return jsonify({"status": "saved"})
-    return jsonify({"status": "failed"}), 400
+    result, status = _store_answer(request.get_json(silent=True), quiz_id=quiz_id)
+    return jsonify(status='saved' if status == 200 else 'failed', **result), status
 
 
 @app.route('/quiz_results/<int:quiz_id>')
@@ -1945,44 +1964,10 @@ def student_quiz_report(quiz_id):
     return render_template('student_result_report.html', quiz=quiz, result=result, report=report)
 
 
-@app.route('/submit_quiz/<int:quiz_id>', methods=['POST'])
-@login_required
+@app.post('/submit_quiz/<int:quiz_id>')
+@student_required
 def submit_quiz(quiz_id):
-    """Legacy submission endpoint kept for backwards compatibility."""
-    user_id = session.get('user_id')
-    quiz = Quiz.query.get_or_404(quiz_id)
-
-    if session.get('user_role') != 'student':
-        flash('Only students can submit quizzes.', 'danger')
-        return redirect(url_for('index'))
-
-    if Result.query.filter_by(student_id=user_id, quiz_id=quiz.id).first():
-        flash('You have already taken this quiz.', 'warning')
-        return redirect(url_for('student_dashboard'))
-
-    session_obj = QuizSession.query.filter_by(student_id=user_id, quiz_id=quiz.id).first()
-    if not session_obj:
-        session_obj = QuizSession(
-            student_id=user_id, quiz_id=quiz.id, saved_answers={}, submitted=False
-        )
-        db.session.add(session_obj)
-        db.session.flush()
-
-    submitted_answers = {}
-    for question in quiz.questions:
-        selected = (
-            request.form.get(f"question_{question.id}")
-            or request.form.get(f"q_{question.id}")
-            or ''
-        ).strip().lower()
-        if selected in ('a', 'b', 'c', 'd'):
-            submitted_answers[str(question.id)] = selected
-
-    _finalize_attempt(user_id, quiz, session_obj, submitted_answers)
-    flash('Quiz submitted successfully!', 'success')
-    return redirect(url_for('quiz_results', quiz_id=quiz.id))
-
-
+    return take_quiz(quiz_id)
 
 
 # @app.route('/save_answer', methods=['POST'])
@@ -2036,95 +2021,50 @@ def submit_quiz(quiz_id):
 @app.route('/save_answer', methods=['POST'])
 @student_required
 def save_answer():
+    result, status = _store_answer(request.get_json(silent=True))
+    return jsonify(result), status
+
+
+def _store_answer(data, *, quiz_id=None):
+    if not isinstance(data, dict):
+        return {'success': False, 'error': 'Expected an answer object'}, 400
     try:
-        data = request.get_json(silent=True) or {}
-        user_id = session.get("user_id")
-        try:
-            quiz_id = int(data.get('quiz_id'))
-            question_id = int(data.get('question_id'))
-        except (TypeError, ValueError):
-            return jsonify({'success': False, 'error': 'Invalid quiz or question id'}), 400
+        quiz_id = int(quiz_id if quiz_id is not None else data.get('quiz_id'))
+        question_id = int(data.get('question_id'))
+    except (TypeError, ValueError, OverflowError):
+        return {'success': False, 'error': 'Invalid quiz or question ID'}, 400
+    selected = data.get('selected_option')
+    if selected not in ('a', 'b', 'c', 'd', '', None):
+        return {'success': False, 'error': 'Invalid option'}, 400
+    quiz = db.session.get(Quiz, quiz_id)
+    question = db.session.get(Question, question_id)
+    if quiz is None or question is None or question.quiz_id != quiz_id:
+        return {'success': False, 'error': 'Question not found'}, 404
+    student = session['user_id']
+    attempt = _quiz_attempt(quiz, student, lock=True)
+    if attempt is None or attempt.submitted or _remaining_seconds(quiz, attempt) == 0:
+        return {'success': False, 'error': 'No eligible quiz attempt'}, 409
 
-        selected_option = data.get('selected_option')
-        if selected_option:
-            selected_option = str(selected_option).strip().lower()
-            if selected_option not in ('a', 'b', 'c', 'd'):
-                return jsonify({'success': False, 'error': 'Invalid option'}), 400
-        else:
-            selected_option = None
+    key = str(question_id)
+    saved = _session_answers(attempt)
+    if selected:
+        saved[key] = selected
+    else:
+        saved.pop(key, None)
+    attempt.saved_answers = saved
+    attempt.last_saved = datetime.utcnow()
+    answer = StudentAnswer.query.filter_by(student_id=student, quiz_id=quiz_id, question_id=question_id).first()
+    if selected:
+        if answer is None:
+            answer = StudentAnswer(student_id=student, quiz_id=quiz_id, question_id=question_id)
+            db.session.add(answer)
+        answer.selected_option = selected
+        answer.is_correct = selected == (question.correct_option or '').lower()
+    elif answer is not None:
+        db.session.delete(answer)
+    db.session.commit()
+    return {'success': True, 'question_id': key, 'selected_option': selected}, 200
 
-        question = db.session.get(Question, question_id)
-        if not question or question.quiz_id != quiz_id:
-            return jsonify({'success': False, 'error': 'Question not found'}), 404
-
-        # Do not accept answers after submission.
-        if Result.query.filter_by(student_id=user_id, quiz_id=quiz_id).first():
-            return jsonify({'success': False, 'error': 'Quiz already submitted'}), 400
-
-        quiz_session = QuizSession.query.filter_by(student_id=user_id, quiz_id=quiz_id).first()
-        if not quiz_session or quiz_session.submitted:
-            return jsonify({'success': False, 'error': 'No active quiz session'}), 400
-
-        question_key = str(question_id)
-
-        # Save to the Flask session as a lightweight fallback.
-        session_key = f'saved_answers_{quiz_id}'
-        session_answers = session.get(session_key, {})
-        if selected_option:
-            session_answers[question_key] = selected_option
-        else:
-            session_answers.pop(question_key, None)
-        session[session_key] = session_answers
-        session.modified = True
-
-        # Save to QuizSession (used by auto-submit).
-        saved = _session_answers(quiz_session)
-        if selected_option:
-            saved[question_key] = selected_option
-        else:
-            saved.pop(question_key, None)
-        quiz_session.saved_answers = saved
-        quiz_session.last_saved = datetime.utcnow()
-
-        # Mirror into StudentAnswer so analytics stay accurate during the quiz.
-        answer = StudentAnswer.query.filter_by(
-            student_id=user_id,
-            quiz_id=quiz_id,
-            question_id=question_id
-        ).first()
-
-        if answer:
-            answer.selected_option = selected_option
-            answer.is_correct = bool(
-                selected_option and question.correct_option
-                and selected_option == question.correct_option.lower()
-            )
-        elif selected_option:
-            db.session.add(StudentAnswer(
-                student_id=user_id,
-                quiz_id=quiz_id,
-                question_id=question_id,
-                selected_option=selected_option,
-                is_correct=bool(
-                    question.correct_option
-                    and selected_option == question.correct_option.lower()
-                )
-            ))
-
-        db.session.commit()
-
-        return jsonify({
-            'success': True,
-            'question_id': question_key,
-            'selected_option': selected_option
-        })
-    except Exception as e:
-        db.session.rollback()
-        app.logger.error(f"Error saving answer: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': 'An error occurred while saving your answer'
-        }), 500
 
 @app.route('/professor/analytics/data')
 @professor_required

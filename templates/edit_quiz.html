@@ -4,6 +4,7 @@
 <div class="container mt-4">
     <h2>Edit Quiz: {{ quiz.title }}</h2>
     <form method="POST" enctype="multipart/form-data">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <div class="mb-3">
             <label for="quiz_title" class="form-label">Quiz Title</label>
             <input type="text" class="form-control" name="quiz_title" id="quiz_title" value="{{ quiz.title }}" required>
@@ -106,12 +107,14 @@
         <a href="{{ url_for('professor_dashboard') }}" class="btn btn-secondary mt-3">Cancel</a>
     </form>
 </div>
-<form id="deleteForm" method="POST" style="display:none;"></form>
 
 <script>
 function deleteQuestion(qid) {
     if (confirm('Are you sure you want to delete this question? This action cannot be undone.')) {
-        fetch(`/professor/question/${qid}/delete`, { method: 'POST' })
+        fetch(`/professor/question/${qid}/delete`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content }
+        })
             .then(response => window.location.reload())
             .catch(error => console.error('Error deleting question:', error));
     }

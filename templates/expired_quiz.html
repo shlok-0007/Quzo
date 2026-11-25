@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="container py-4">
+  <h1>Time is up</h1>
+  <p>Submit the answers saved for {{ quiz.title }}.</p>
+  <form method="POST" action="{{ url_for('auto_submit_quiz', quiz_id=quiz.id) }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <button type="submit" class="btn btn-primary">Submit saved answers</button>
+  </form>
+</section>
+{% endblock %}

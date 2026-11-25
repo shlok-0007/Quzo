@@ -59,7 +59,10 @@ You can access a live demo of this application at: [https://quzo.vercel.app](htt
    | `GEMINI_API_KEY` | No | Single Google Gemini key for AI quiz generation. |
    | `GEMINI_API_KEYS` | No | Comma-separated list of Gemini keys for rotation. Takes precedence when set. |
    | `DATABASE_URL` | Production: yes | SQLAlchemy database URL. `postgres://` is normalized automatically. `POSTGRES_URL` / `POSTGRES_PRISMA_URL` / `NEON_DATABASE_URL` are also accepted. |
-   | `UPLOAD_FOLDER` | No | Directory for uploaded question images. Defaults to `static/uploads` locally and `/tmp/quzo-uploads` on Vercel. |
+   | `UPLOAD_FOLDER` | No | Private upload directory. Defaults to `instance/uploads` locally and `/tmp/quzo-uploads` on Vercel. |
+   | `QUZO_ENV` | Production | Set to `production` for non-Vercel deployments to require a session secret and HTTPS cookies. |
+   | `QUZO_PROFESSOR_INVITE` | For new professor accounts | Private invitation code. Existing professors can sign in without it. |
+   | `QUZO_PUBLIC_URL`, `QUZO_SMTP_HOST`, `QUZO_MAIL_FROM` | For recovery mail | Public app origin and SMTP-over-TLS delivery settings. Set `QUZO_SMTP_PORT`, `QUZO_SMTP_USER`, and `QUZO_SMTP_PASSWORD` as needed. |
 
 4. **Run the app**
    ```bash
@@ -73,6 +76,16 @@ You can access a live demo of this application at: [https://quzo.vercel.app](htt
 - **Database:** SQLite (`app.db`) is used automatically for local development. On serverless hosts the app falls back to `/tmp/quzo.db`, which is wiped on every cold start — always set `DATABASE_URL` for production.
 - **API keys:** Keys are read from environment variables first. The optional `api_keys.json` file is a local-only fallback and is git-ignored; never commit real keys.
 - **Uploads:** Question images are written to `UPLOAD_FOLDER` and served through the `/uploads/<filename>` route. On Vercel this is ephemeral, so use external object storage for long-lived images.
+- **Recovery:** Reset links expire after 20 minutes and become unusable after a successful reset. Configure SMTP and verify it with a test account before deploying. The sign-in session format changed, so users with older sessions will need to sign in again.
+
+## Local tests
+
+```sh
+python -m pip install -r requirements.txt pytest
+python -m pytest -q
+```
+
+The tests use an isolated SQLite database and mock Gemini. Verify SMTP, Gemini, and PostgreSQL against a staging deployment before release.
 
 ## Deploying to Vercel
 

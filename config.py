@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
@@ -35,9 +36,16 @@ def _default_database_uri():
 
 
 class Config:
-    # NEVER rely on this fallback in production: set SECRET_KEY in the
-    # hosting provider's environment variables.
-    SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-only-insecure-secret-change-me'
+    PRODUCTION = os.environ.get('QUZO_ENV') == 'production' or bool(
+        os.environ.get('VERCEL') or os.environ.get('AWS_LAMBDA_FUNCTION_NAME')
+    )
+    SECRET_KEY = os.environ.get('SECRET_KEY')
+    if not SECRET_KEY and PRODUCTION:
+        raise RuntimeError('SECRET_KEY is required in production.')
+    if not SECRET_KEY:
+        from secrets import token_urlsafe
+
+        SECRET_KEY = token_urlsafe(48)
 
     GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 
@@ -49,14 +57,16 @@ class Config:
     UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER') or (
         '/tmp/quzo-uploads'
         if (os.environ.get('VERCEL') or os.environ.get('AWS_LAMBDA_FUNCTION_NAME'))
-        else os.path.join(basedir, 'static', 'uploads')
+        else os.path.join(basedir, 'instance', 'uploads')
     )
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB upload limit
 
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
+    PERMANENT_SESSION_LIFETIME = timedelta(hours=12)
+    SESSION_REFRESH_EACH_REQUEST = False
     # Vercel terminates TLS for us, so mark the cookie Secure there.
-    SESSION_COOKIE_SECURE = bool(os.environ.get('VERCEL')) or os.environ.get(
+    SESSION_COOKIE_SECURE = PRODUCTION or os.environ.get(
         'SESSION_COOKIE_SECURE', ''
     ).lower() in ('1', 'true', 'yes')
 

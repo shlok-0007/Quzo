@@ -1,13 +1,16 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="container mt-5">
-    <h3>🔐 Enter Access Code for Quiz: {{ quiz.title }}</h3>
+    <h3>🔐 Start quiz: {{ quiz.title }}</h3>
     <form method="POST">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        {% if quiz.access_code %}
         <div class="mb-3">
             <label for="access_code">Enter Access Code:</label>
             <input type="text" class="form-control" id="access_code" name="access_code" required>
         </div>
-        <button type="submit" class="btn btn-primary">Submit Code</button>
+        {% endif %}
+        <button type="submit" class="btn btn-primary">Start quiz</button>
         <a href="{{ url_for('student_dashboard') }}" class="btn btn-secondary">Cancel</a>
     </form>
 </div>

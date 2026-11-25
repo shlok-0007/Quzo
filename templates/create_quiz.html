@@ -3,6 +3,8 @@
 <h2 class="mb-4">Create New Quiz</h2>
 
 <form method="POST" action="{{ url_for('create_quiz') }}" enctype="multipart/form-data" id="quiz-form" class="card p-4 shadow-sm">
+
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
   <div class="mb-3">
     <label for="quiz_title" class="form-label">Quiz Title</label>
     <input type="text" class="form-control" id="quiz_title" name="quiz_title" required>
