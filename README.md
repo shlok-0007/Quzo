@@ -87,6 +87,17 @@ python -m pytest -q
 
 The tests use an isolated SQLite database and mock Gemini. Verify SMTP, Gemini, and PostgreSQL against a staging deployment before release.
 
+## Managed database migrations
+
+Set `QUZO_MANAGED_SCHEMA=1` in staging or production to use Alembic instead of startup table creation. Apply migrations from the repository root before starting the web process.
+
+```sh
+python -m flask --app wsgi db upgrade
+python -m flask --app wsgi db check
+```
+
+For a database created by an older release using `create_all`, take a backup and verify a restore on a separate database. Compare the existing tables, columns, and constraints with revision `f14084471806` before adopting that baseline. If they match, run `python -m flask --app wsgi db stamp f14084471806` once, then upgrade and check. Apply the procedure to the restored copy before repeating it on the live database.
+
 ## Deploying to Vercel
 
 Vercel deploys this app using its zero-config **Flask** support:

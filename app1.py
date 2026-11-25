@@ -92,13 +92,14 @@ except OSError as e:  # pragma: no cover - read-only filesystem edge case
     print(f"Could not create upload folder: {e}")
 
 # --- Database Setup ---
-with app.app_context():
-    try:
-        db.create_all()
-        print("Database tables created (if they didn't exist).")
-    except Exception as e:  # pragma: no cover - deployment/permission specific
-        print(f"Error creating database tables: {e}")
-        traceback.print_exc()
+if os.environ.get('QUZO_MANAGED_SCHEMA') != '1':
+    with app.app_context():
+        try:
+            db.create_all()
+            print("Database tables created (if they didn't exist).")
+        except Exception as e:  # pragma: no cover - deployment/permission specific
+            print(f"Error creating database tables: {e}")
+            traceback.print_exc()
 
 
 # --- Small helpers ---

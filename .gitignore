@@ -52,9 +52,6 @@ instance/
 # Local configuration
 instance/
 
-# Flask migrations
-migrations/
-
 # macOS
 .DS_Store
 

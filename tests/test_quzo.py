@@ -15,12 +15,17 @@ def quzo(tmp_path_factory):
         patch.setenv('DATABASE_URL', database)
         patch.setenv('UPLOAD_FOLDER', str(folder / 'uploads'))
         patch.setenv('SECRET_KEY', 'quzo-test-session-key')
+        patch.setenv('QUZO_MANAGED_SCHEMA', '1')
         patch.setenv('QUZO_PROFESSOR_INVITE', 'test-invitation')
         patch.delenv('VERCEL', raising=False)
         patch.delenv('AWS_LAMBDA_FUNCTION_NAME', raising=False)
         import app1
 
         app1.app.config.update(TESTING=True, SESSION_COOKIE_SECURE=False)
+        upgrade = app1.app.test_cli_runner().invoke(args=['db', 'upgrade'])
+        assert upgrade.exit_code == 0, upgrade.output
+        check = app1.app.test_cli_runner().invoke(args=['db', 'check'])
+        assert check.exit_code == 0, check.output
         yield app1
 
 
