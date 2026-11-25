@@ -41,6 +41,7 @@ from werkzeug.utils import secure_filename
 from api_utils import generate_quiz_questions, validate_questions
 from config import Config
 from models import (
+    GradeSnapshot,
     Question,
     QuestionExplanation,
     Quiz,
@@ -201,14 +202,12 @@ def _finalize_attempt(student_id, quiz, quiz_session, selected_answers):
         )
         score += marks_correct if is_correct else marks_incorrect
 
-    total_questions = len(questions)
     result = Result.query.filter_by(student_id=student_id, quiz_id=quiz.id).first()
     if result is None:
         result = Result(student_id=student_id, quiz_id=quiz.id)
         db.session.add(result)
 
-    result.score = round(score, 2)
-    result.total_questions = total_questions
+    _record_grade(result, questions, selected_answers, marks_correct, marks_incorrect, score)
     result.submitted_at = datetime.utcnow()
 
     quiz_session.submitted = True
@@ -218,6 +217,35 @@ def _finalize_attempt(student_id, quiz, quiz_session, selected_answers):
 
     db.session.commit()
     return result
+
+
+def _record_grade(result, questions, selections, marks_correct, marks_incorrect, score):
+    result.score = round(score, 2)
+    result.total_questions = len(questions)
+    basis = {
+        'marks_correct': marks_correct,
+        'marks_incorrect': marks_incorrect,
+        'questions': [
+            {
+                'id': question.id,
+                'version': question.last_updated.isoformat() if question.last_updated else None,
+                'correct': (question.correct_option or '').lower(),
+                'selected': selections.get(str(question.id)),
+            }
+            for question in sorted(questions, key=lambda question: question.id)
+        ],
+    }
+    previous = None
+    if result.id is not None:
+        previous = GradeSnapshot.query.filter_by(result_id=result.id).order_by(GradeSnapshot.id.desc()).first()
+    if previous is None or previous.basis != basis or previous.score != result.score:
+        db.session.add(GradeSnapshot(result=result, basis=basis, score=result.score))
+
+
+def _delete_results(**filters):
+    result_ids = db.session.query(Result.id).filter_by(**filters)
+    GradeSnapshot.query.filter(GradeSnapshot.result_id.in_(result_ids)).delete(synchronize_session=False)
+    Result.query.filter_by(**filters).delete(synchronize_session=False)
 
 
 # --- Decorators for Role-Based Access Control ---
@@ -1274,8 +1302,7 @@ def edit_quiz(quiz_id):
                 i += 1
 
             quiz.last_updated = datetime.utcnow()
-            db.session.commit()
-            flash('Quiz and questions updated successfully.', 'success')
+            db.session.flush()
 
             # 3. Regrade every answer against the current correct options.
             all_answers = StudentAnswer.query.filter_by(quiz_id=quiz.id).all()
@@ -1301,8 +1328,8 @@ def edit_quiz(quiz_id):
                 for ans in answers:
                     if ans.selected_option:
                         score += marks_correct if ans.is_correct else marks_incorrect
-                result.score = round(score, 2)
-                result.total_questions = len(quiz.questions)
+                selections = {str(answer.question_id): answer.selected_option for answer in answers}
+                _record_grade(result, quiz.questions, selections, marks_correct, marks_incorrect, score)
 
             db.session.commit()
             flash("All student answers have been regraded.", "info")
@@ -1326,7 +1353,7 @@ def delete_quiz(quiz_id):
         RegradeLog.query.filter_by(quiz_id=quiz.id).delete(synchronize_session=False)
         StudentAnswer.query.filter_by(quiz_id=quiz.id).delete(synchronize_session=False)
         QuizSession.query.filter_by(quiz_id=quiz.id).delete(synchronize_session=False)
-        Result.query.filter_by(quiz_id=quiz.id).delete(synchronize_session=False)
+        _delete_results(quiz_id=quiz.id)
         question_ids = db.session.query(Question.id).filter_by(quiz_id=quiz.id)
         QuestionExplanation.query.filter(QuestionExplanation.question_id.in_(question_ids)).delete(
             synchronize_session=False
@@ -1377,14 +1404,17 @@ def regrade_quiz(quiz_id):
     results = Result.query.filter_by(quiz_id=quiz_id).all()
     professor_id = session['user_id']
     marks_correct, marks_incorrect = _marks_scheme(quiz)
+    questions = {question.id: question for question in quiz.questions}
 
     for result in results:
         student_id = result.student_id
         answers = StudentAnswer.query.filter_by(quiz_id=quiz_id, student_id=student_id).all()
         new_score = 0.0
         for ans in answers:
-            if not ans.selected_option:
+            question = questions.get(ans.question_id)
+            if not ans.selected_option or question is None:
                 continue
+            ans.is_correct = ans.selected_option.lower() == (question.correct_option or '').lower()
             new_score += marks_correct if ans.is_correct else marks_incorrect
         new_score = round(new_score, 2)
 
@@ -1397,8 +1427,8 @@ def regrade_quiz(quiz_id):
                 regraded_by=professor_id
             ))
 
-        result.score = new_score
-        result.total_questions = len(quiz.questions)
+        selections = {str(answer.question_id): answer.selected_option for answer in answers}
+        _record_grade(result, quiz.questions, selections, marks_correct, marks_incorrect, new_score)
 
     db.session.commit()
     flash('Regrading and logging completed.', 'success')
@@ -1586,9 +1616,7 @@ def reset_student_quiz(quiz_id, student_username):
         RegradeLog.query.filter_by(quiz_id=quiz_id, student_id=student.id).delete(
             synchronize_session=False
         )
-        Result.query.filter_by(quiz_id=quiz_id, student_id=student.id).delete(
-            synchronize_session=False
-        )
+        _delete_results(quiz_id=quiz_id, student_id=student.id)
         StudentAnswer.query.filter_by(quiz_id=quiz_id, student_id=student.id).delete(
             synchronize_session=False
         )
@@ -1612,7 +1640,7 @@ def reset_all_students(quiz_id):
 
     try:
         RegradeLog.query.filter_by(quiz_id=quiz_id).delete(synchronize_session=False)
-        Result.query.filter_by(quiz_id=quiz_id).delete(synchronize_session=False)
+        _delete_results(quiz_id=quiz_id)
         StudentAnswer.query.filter_by(quiz_id=quiz_id).delete(synchronize_session=False)
         QuizSession.query.filter_by(quiz_id=quiz_id).delete(synchronize_session=False)
 

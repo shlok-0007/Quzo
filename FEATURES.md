@@ -66,7 +66,9 @@ Global CSRF protection covers forms and JSON writes. Logout, quiz start, and exp
 
 The AI generator accepts optional curriculum notes and drafts answer explanations. Professors approve explanations individually, and students see approved explanations when their reports are released. Editing the associated question clears the old explanation so it can’t describe a superseded answer.
 
-The branch adds versioned Alembic migrations, a GitHub Actions test matrix for SQLite and PostgreSQL, and a local test baseline. Live SMTP and Gemini, PostgreSQL concurrency, and image processing need staging verification. Object storage, backup automation, immutable scoring snapshots, and proctoring are still open.
+Submissions and regrades retain the answer key, question versions, selected answers, mark scheme, and score used at calculation time. Explicit attempt resets remove their associated grading records.
+
+The branch adds versioned Alembic migrations, a GitHub Actions test matrix for SQLite and PostgreSQL, and a local test baseline. Live SMTP and Gemini, PostgreSQL concurrency, and image processing need staging verification. Object storage, backup automation, and proctoring are still open.
 
 1. **Establish a test baseline.** Use a temporary database and separate test secrets. Add a professor and a student fixture and cover manual quiz creation, enrollment by code, submission, release, and access to the published report. Run the same smoke flow on PostgreSQL before a deployment.
 2. **Secure account and quiz operations.** Add protected POST handling and CSRF coverage, then test every professor write and export with a second professor’s account. Converge on one server-side check for an eligible attempt, valid question membership, remaining time, and finalization. Verify duplicate submission leaves a single result.

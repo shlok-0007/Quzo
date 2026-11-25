@@ -115,6 +115,18 @@ class Result(db.Model):
         return f"<Result student_id={self.student_id} quiz_id={self.quiz_id} score={self.score}>"
 
 
+class GradeSnapshot(db.Model):
+    """The answer key, mark scheme, and selections used for a computed score."""
+
+    __tablename__ = 'grade_snapshot'
+    id = db.Column(db.Integer, primary_key=True)
+    result_id = db.Column(db.Integer, db.ForeignKey('result.id', ondelete='CASCADE'), nullable=False, index=True)
+    graded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    basis = db.Column(JSON, nullable=False)
+    score = db.Column(db.Float, nullable=False)
+    result = db.relationship('Result')
+
+
 class StudentAnswer(db.Model):
     __tablename__ = 'student_answers'
     id = db.Column(db.Integer, primary_key=True)

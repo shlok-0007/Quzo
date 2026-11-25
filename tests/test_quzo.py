@@ -54,7 +54,7 @@ def test_csrf_blocks_missing_and_wrong_tokens(quzo):
 
 
 def test_protected_quiz_attempt_and_results(quzo):
-    from models import Question, Quiz, QuizSession, Result, User, db
+    from models import GradeSnapshot, Question, Quiz, QuizSession, Result, User, db
 
     with quzo.app.app_context():
         for username, role in [('teacher', 'professor'), ('other-teacher', 'professor'), ('student', 'student')]:
@@ -93,11 +93,20 @@ def test_protected_quiz_attempt_and_results(quzo):
     assert student.post(take, data=with_token(student)).status_code == 302
     with quzo.app.app_context():
         assert Result.query.one().score == 4
+        snapshot = GradeSnapshot.query.one()
+        assert snapshot.score == 4
+        assert snapshot.basis['questions'][0]['selected'] == 'b'
+        db.session.get(Quiz, quiz_id).marks_correct = 5
+        db.session.commit()
     report = f'/student/quiz/{quiz_id}/report'
     assert student.get(report).location.endswith('/dashboard')
     teacher = quzo.app.test_client()
     sign_in(teacher, 'teacher')
     assert teacher.get('/professor/dashboard').status_code == 200
+    assert teacher.post(f'/professor/quiz/{quiz_id}/regrade', data=with_token(teacher)).status_code == 302
+    with quzo.app.app_context():
+        assert Result.query.one().score == 5
+        assert [row.score for row in GradeSnapshot.query.order_by(GradeSnapshot.id)] == [4, 5]
     release = f'/professor/quiz/{quiz_id}/release_report'
     assert teacher.post(release, data=with_token(teacher)).status_code == 302
     assert student.get(report).status_code == 200
