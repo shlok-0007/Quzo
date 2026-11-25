@@ -68,7 +68,7 @@ The AI generator accepts optional curriculum notes and drafts answer explanation
 
 Submissions and regrades retain the answer key, question versions, selected answers, mark scheme, and score used at calculation time. Explicit attempt resets remove their associated grading records.
 
-The branch adds versioned Alembic migrations, a GitHub Actions test matrix for SQLite and PostgreSQL, and a local test baseline. Live SMTP and Gemini, PostgreSQL concurrency, and image processing need staging verification. Object storage, backup automation, and proctoring are still open.
+The branch adds versioned Alembic migrations, a GitHub Actions test matrix for SQLite and PostgreSQL, and a local test baseline. Question media can use a private S3-compatible bucket. A backup command inspects SQLite and PostgreSQL archives before publishing them. The deployed backup schedule and database restore rehearsal still need an environment. Live SMTP and Gemini, PostgreSQL concurrency, image processing, and real bucket access need staging verification. Proctoring is still open pending a school-approved consent, accessibility, and retention policy.
 
 1. **Establish a test baseline.** Use a temporary database and separate test secrets. Add a professor and a student fixture and cover manual quiz creation, enrollment by code, submission, release, and access to the published report. Run the same smoke flow on PostgreSQL before a deployment.
 2. **Secure account and quiz operations.** Add protected POST handling and CSRF coverage, then test every professor write and export with a second professor’s account. Converge on one server-side check for an eligible attempt, valid question membership, remaining time, and finalization. Verify duplicate submission leaves a single result.

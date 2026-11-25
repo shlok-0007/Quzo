@@ -1,6 +1,8 @@
 import json
 import os
 import re
+import sqlite3
+from contextlib import closing
 
 import pytest
 
@@ -51,6 +53,23 @@ def test_csrf_blocks_missing_and_wrong_tokens(quzo):
     token(client)
     assert client.post('/login', data={'_csrf_token': 'wrong'}).status_code == 400
     assert client.get('/logout').status_code == 405
+
+
+def test_sqlite_backup_contains_data_and_refuses_overwrite(tmp_path):
+    from backup import backup_database
+
+    source = tmp_path / 'source.db'
+    archive = tmp_path / 'backup.db'
+    with closing(sqlite3.connect(source)) as db:
+        db.execute('CREATE TABLE quiz (title TEXT)')
+        db.execute('INSERT INTO quiz VALUES (?)', ('Backup rehearsal',))
+        db.commit()
+    url = f'sqlite:///{source.as_posix()}'
+    backup_database(url, archive)
+    with closing(sqlite3.connect(archive)) as db:
+        assert db.execute('SELECT title FROM quiz').fetchone() == ('Backup rehearsal',)
+    with pytest.raises(FileExistsError):
+        backup_database(url, archive)
 
 
 def test_protected_quiz_attempt_and_results(quzo):

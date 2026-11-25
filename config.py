@@ -60,6 +60,8 @@ class Config:
         else os.path.join(basedir, 'instance', 'uploads')
     )
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB upload limit
+    QUZO_S3_BUCKET = os.environ.get('QUZO_S3_BUCKET')
+    QUZO_S3_ENDPOINT = os.environ.get('QUZO_S3_ENDPOINT')
 
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'

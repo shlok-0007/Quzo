@@ -75,7 +75,7 @@ You can access a live demo of this application at: [https://quzo.vercel.app](htt
 
 - **Database:** SQLite (`app.db`) is used automatically for local development. On serverless hosts the app falls back to `/tmp/quzo.db`, which is wiped on every cold start — always set `DATABASE_URL` for production.
 - **API keys:** Keys are read from environment variables first. The optional `api_keys.json` file is a local-only fallback and is git-ignored; never commit real keys.
-- **Uploads:** Question images are written to `UPLOAD_FOLDER` and served through the `/uploads/<filename>` route. On Vercel this is ephemeral, so use external object storage for long-lived images.
+- **Uploads:** Question images are served through an authenticated route. Set `QUZO_S3_BUCKET` for durable storage, optionally set `QUZO_S3_ENDPOINT` for an S3-compatible endpoint, and use the AWS SDK credential chain. Keep the bucket private and grant the app read and write access under `questions/`. When no bucket is configured, the app uses `UPLOAD_FOLDER`, which is ephemeral on Vercel.
 - **Recovery:** Reset links expire after 20 minutes and become unusable after a successful reset. Configure SMTP and verify it with a test account before deploying. The sign-in session format changed, so users with older sessions will need to sign in again.
 
 ## Local tests
@@ -97,6 +97,12 @@ python -m flask --app wsgi db check
 ```
 
 For a database created by an older release using `create_all`, take a backup and verify a restore on a separate database. Compare the existing tables, columns, and constraints with revision `f14084471806` before adopting that baseline. If they match, run `python -m flask --app wsgi db stamp f14084471806` once, then upgrade and check. Apply the procedure to the restored copy before repeating it on the live database.
+
+## Backup and restore checks
+
+Run `python backup.py path/to/new-backup` with `QUZO_BACKUP_DATABASE_URL` supplied through the backup process environment. Use an existing private, durable destination directory. SQLite archives are checked for integrity. PostgreSQL requires compatible `pg_dump` and `pg_restore` utilities and creates a checked custom-format archive. Schedule this command in the deployment's backup service and retain the question-image bucket separately.
+
+Rehearse restoration against a new database with isolated credentials. Open a SQLite archive from a copy. For PostgreSQL, configure an isolated libpq service or rehearsal host and credentials in the environment, then run `pg_restore --dbname=quzo_restore --exit-on-error --no-owner path/to/archive` against the empty rehearsal database. Verify migrations and the quiz smoke flow against the restored copy before relying on the backup.
 
 ## Deploying to Vercel
 

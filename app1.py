@@ -26,6 +26,7 @@ from flask import (
     render_template,
     request,
     send_from_directory,
+    send_file,
     session,
     url_for,
 )
@@ -40,6 +41,7 @@ from werkzeug.utils import secure_filename
 
 from api_utils import generate_quiz_questions, validate_questions
 from config import Config
+from media_storage import read_image, store_image
 from models import (
     GradeSnapshot,
     Question,
@@ -155,10 +157,20 @@ def _save_upload(file_storage):
             pixels.info.clear()
     except (OSError, Image.DecompressionBombError) as error:
         raise ValueError('Upload a valid PNG, JPEG, or WebP question image.') from error
-    filename = uuid.uuid4().hex + formats[output_format]
+    extension = formats[output_format]
+    filename = uuid.uuid4().hex + extension
+    with io.BytesIO() as output:
+        pixels.save(output, format=output_format)
+        data = output.getvalue()
+    if len(data) > app.config['MAX_CONTENT_LENGTH']:
+        raise ValueError('Question image exceeds the size limit after processing.')
+    mimetype = 'image/jpeg' if extension == '.jpg' else f'image/{extension[1:]}'
+    if store_image(filename, data, mimetype):
+        return filename
     folder = app.config['UPLOAD_FOLDER']
     os.makedirs(folder, exist_ok=True)
-    pixels.save(os.path.join(folder, filename), format=output_format)
+    with open(os.path.join(folder, filename), 'wb') as target:
+        target.write(data)
     return filename
 
 
@@ -1113,7 +1125,13 @@ def uploaded_file(filename):
     folder = current_app.config['UPLOAD_FOLDER']
     if not os.path.isfile(os.path.join(folder, filename)):
         folder = os.path.join(current_app.static_folder, 'uploads')
-    response = send_from_directory(folder, filename)
+    if os.path.isfile(os.path.join(folder, filename)):
+        response = send_from_directory(folder, filename)
+    else:
+        remote_bytes = read_image(filename)
+        if remote_bytes is None:
+            abort(404)
+        response = send_file(io.BytesIO(remote_bytes), download_name=filename)
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['Cache-Control'] = 'private, no-store'
     return response
