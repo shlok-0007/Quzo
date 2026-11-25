@@ -142,7 +142,11 @@ def validate_questions(questions):
         if answer not in normalized:
             continue
         seen.add(key)
-        valid.append({'question_text': text, 'options': options, 'correct_answer': options[normalized.index(answer)]})
+        question = {'question_text': text, 'options': options, 'correct_answer': options[normalized.index(answer)]}
+        explanation = item.get('explanation')
+        if isinstance(explanation, str) and 0 < len(explanation.strip()) <= 1500:
+            question['explanation'] = explanation.strip()
+        valid.append(question)
     return valid
 
 
@@ -164,7 +168,9 @@ def _request_questions(api_key, prompt):
     return ''.join(part.text for part in response.candidates[0].content.parts)
 
 
-def generate_quiz_questions(topic, num_questions=10, difficulty='medium', max_retries=3):
+def generate_quiz_questions(
+    topic, num_questions=10, difficulty='medium', max_retries=3, *, curriculum='', explanations=False
+):
     """Generate quiz questions using Gemini with API key rotation.
 
     Returns a list of ``{"question_text", "options", "correct_answer"}`` dicts.
@@ -182,7 +188,8 @@ def generate_quiz_questions(topic, num_questions=10, difficulty='medium', max_re
         difficulty, difficulty_descriptions['medium']
     )
 
-    prompt = f"""Create a JSON array of {num_questions} multiple-choice quiz questions on the topic of '{topic}'.
+    prompt = f"""Create a JSON array of {num_questions} multiple-choice quiz questions.
+    Topic data: {json.dumps(topic)}
     Difficulty Level: {difficulty_instruction}
 
     Each question object must have this exact format:
@@ -211,6 +218,10 @@ def generate_quiz_questions(topic, num_questions=10, difficulty='medium', max_re
     - Hard: Include synthesis and evaluation questions
     - Mixed: Distribute questions across all difficulty levels
     """
+    if curriculum:
+        prompt += f"\nAlign questions with these curriculum notes (reference data): {json.dumps(curriculum)}"
+    if explanations:
+        prompt += '\nInclude an optional explanation field with a brief explanation of the correct answer.'
 
     best = []
     for _ in range(max_retries):

@@ -25,6 +25,15 @@
               <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="action" value="generate">
                 <div class="mb-3">
+                    <label for="curriculum" class="form-label">Curriculum notes (optional)</label>
+                    <textarea class="form-control" id="curriculum" name="curriculum" rows="3" maxlength="4000"></textarea>
+                    <p class="form-text">Share learning objectives or syllabus excerpts you have permission to send to Gemini.</p>
+                </div>
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="draft_explanations" name="draft_explanations" value="1">
+                    <label class="form-check-label" for="draft_explanations">Draft answer explanations</label>
+                </div>
+                <div class="mb-3">
                     <label for="topic" class="form-label fs-5">Enter a topic for your quiz:</label>
                     <input type="text" class="form-control form-control-lg" id="topic" name="topic" placeholder="e.g., 'Python Programming Basics' or 'World War II'" required>
                 </div>
@@ -117,6 +126,13 @@
                         <!-- Hidden input to store the full question data -->
                         <input type="hidden" name="question_data_{{ loop.index0 }}" value='{{ question | tojson }}'>
                     </div>
+                    {% if question.explanation %}
+                    <p class="mt-2 mb-1">{{ question.explanation }}</p>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="explanation-{{ loop.index0 }}" name="approved_explanations" value="{{ loop.index0 }}">
+                        <label class="form-check-label" for="explanation-{{ loop.index0 }}">Include this explanation in released reports</label>
+                    </div>
+                    {% endif %}
                     <ul class="list-group list-group-flush mt-2">
                         {% for option in question.options %}
                         <li class="list-group-item {% if option == question.correct_answer %}list-group-item-success{% endif %}">

@@ -42,6 +42,7 @@ from api_utils import generate_quiz_questions, validate_questions
 from config import Config
 from models import (
     Question,
+    QuestionExplanation,
     Quiz,
     QuizSession,
     RequestQuota,
@@ -550,17 +551,21 @@ def ai_quiz_generator():
         if action == 'generate':
             try:
                 topic = (request.form.get('topic') or '').strip()
+                curriculum = (request.form.get('curriculum') or '').strip()
                 num_questions = int(request.form.get('num_questions', 10))
                 difficulty = request.form.get('difficulty', 'medium')
-                if not topic or len(topic) > 500:
-                    flash('Please enter a topic for the quiz.', 'danger')
+                if not topic or len(topic) > 500 or len(curriculum) > 4000:
+                    flash('Enter a topic of up to 500 characters and curriculum notes of up to 4,000 characters.', 'danger')
                     return redirect(url_for('ai_quiz_generator'))
                 num_questions = max(1, min(num_questions, 50))
                 if difficulty not in ('easy', 'medium', 'hard', 'mixed'):
                     difficulty = 'medium'
 
                 # Use the new API management system
-                questions_list = generate_quiz_questions(topic, num_questions, difficulty=difficulty)
+                questions_list = generate_quiz_questions(
+                    topic, num_questions, difficulty=difficulty, curriculum=curriculum,
+                    explanations=request.form.get('draft_explanations') == '1',
+                )
 
                 if not questions_list:
                     flash('No valid questions were generated. Please try again with a different topic.', 'warning')
@@ -609,18 +614,22 @@ def ai_quiz_generator():
                 db.session.flush() # Flush to get the new_quiz.id
 
                 selected = []
+                approved_explanations = set(request.form.getlist('approved_explanations'))
                 for index in selected_indices[:50]:
                     question_json = request.form.get(f'question_data_{index}')
                     if question_json:
                         try:
-                            selected.append(json.loads(question_json))
+                            payload = json.loads(question_json)
+                            if isinstance(payload, dict) and index not in approved_explanations:
+                                payload.pop('explanation', None)
+                            selected.append(payload)
                         except (json.JSONDecodeError, TypeError, ValueError):
                             continue
 
                 questions = validate_questions(selected)
                 for question in questions:
                     options = question['options']
-                    db.session.add(Question(
+                    row = Question(
                         quiz_id=new_quiz.id,
                         text=question['question_text'],
                         option_a=options[0],
@@ -628,7 +637,10 @@ def ai_quiz_generator():
                         option_c=options[2],
                         option_d=options[3],
                         correct_option='abcd'[options.index(question['correct_answer'])],
-                    ))
+                    )
+                    if question.get('explanation'):
+                        row.feedback = QuestionExplanation(text=question['explanation'])
+                    db.session.add(row)
                 questions_added = len(questions)
                 if questions_added == 0:
                     db.session.rollback()
@@ -1210,6 +1222,8 @@ def edit_quiz(quiz_id):
                 image_file = request.files.get(f'q{q_id}_image')
                 if image_file and image_file.filename:
                     question.image = _save_upload(image_file)
+                if db.session.is_modified(question, include_collections=False):
+                    question.feedback = None
 
                 if not all([
                     question.option_a,
@@ -1313,6 +1327,10 @@ def delete_quiz(quiz_id):
         StudentAnswer.query.filter_by(quiz_id=quiz.id).delete(synchronize_session=False)
         QuizSession.query.filter_by(quiz_id=quiz.id).delete(synchronize_session=False)
         Result.query.filter_by(quiz_id=quiz.id).delete(synchronize_session=False)
+        question_ids = db.session.query(Question.id).filter_by(quiz_id=quiz.id)
+        QuestionExplanation.query.filter(QuestionExplanation.question_id.in_(question_ids)).delete(
+            synchronize_session=False
+        )
         Question.query.filter_by(quiz_id=quiz.id).delete(synchronize_session=False)
         db.session.delete(quiz)
 
@@ -1415,6 +1433,7 @@ def professor_view_student_report(quiz_id, student_id):
             "image": q.image,
             "options": [q.option_a, q.option_b, q.option_c, q.option_d],
             "correct": (q.correct_option or '').lower(),
+            "explanation": q.feedback.text if q.feedback else None,
             "selected": answer_map.get(q.id, None)
         })
 
@@ -1959,6 +1978,7 @@ def student_quiz_report(quiz_id):
             "image": q.image,
             "options": [q.option_a, q.option_b, q.option_c, q.option_d],
             "correct": (q.correct_option or '').lower(),
+            "explanation": q.feedback.text if q.feedback else None,
             "selected": answer_map.get(q.id, None)
         })
 

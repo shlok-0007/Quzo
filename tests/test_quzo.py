@@ -144,3 +144,30 @@ def test_ai_validation_filters_duplicates_and_invalid_answers(monkeypatch, tmp_p
     monkeypatch.setattr(api_utils, '_request_questions', lambda *_: json.dumps([wrong, valid]))
     assert api_utils.generate_quiz_questions('Geography', 2)[0]['correct_answer'] == 'Tokyo'
     assert not (tmp_path / 'api_keys.json').exists()
+
+
+def test_professor_approves_explanations_before_saving(quzo):
+    from models import QuestionExplanation, Quiz, User, db
+
+    with quzo.app.app_context():
+        user = User(username='ai-teacher', email='ai-teacher@example.test', role='professor')
+        user.set_password('Example1!')
+        db.session.add(user)
+        db.session.commit()
+    client = quzo.app.test_client()
+    sign_in(client, 'ai-teacher')
+    assert client.get('/ai_quiz_generator').status_code == 200
+    draft = {'options': ['A', 'B', 'C', 'D'], 'correct_answer': 'B', 'explanation': 'Reason for B'}
+    response = client.post('/ai_quiz_generator', data=with_token(client, {
+        'action': 'create_quiz', 'quiz_title': 'AI approval test', 'selected_questions': ['0', '1'],
+        'approved_explanations': '0',
+        'question_data_0': json.dumps(dict(draft, question_text='Approved explanation?')),
+        'question_data_1': json.dumps(dict(draft, question_text='Unapproved explanation?')),
+    }))
+    assert response.location.endswith('/dashboard')
+    with quzo.app.app_context():
+        quiz = Quiz.query.filter_by(title='AI approval test').one()
+        assert len(quiz.questions) == 2
+        row = QuestionExplanation.query.one()
+        assert row.text == 'Reason for B'
+        assert next(q.text for q in quiz.questions if q.id == row.question_id) == 'Approved explanation?'

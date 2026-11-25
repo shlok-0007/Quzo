@@ -87,6 +87,13 @@ class Question(db.Model):
     option_d = db.Column(db.String(500), nullable=False)
     correct_option = db.Column(db.String(1), nullable=False)
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    feedback = db.relationship('QuestionExplanation', uselist=False, cascade='all, delete-orphan')
+
+
+class QuestionExplanation(db.Model):
+    __tablename__ = 'question_explanation'
+    question_id = db.Column(db.Integer, db.ForeignKey('question.id', ondelete='CASCADE'), primary_key=True)
+    text = db.Column(db.Text, nullable=False)
 
 
 class Result(db.Model):
